@@ -13,3 +13,7 @@ def time_it(func):
         logger.info(f"Time taken by {func.__name__} is {end - start:.04f} seconds")
         return result
     return wrapper
+
+
+def normalize(v: np.ndarray) -> np.ndarray:
+    return v / np.linalg.norm(v)
