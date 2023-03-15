@@ -1,4 +1,6 @@
 import numpy as np
+import shutil
+import os
 from sklearn import neighbors, decomposition
 from func import *
 from mylogger import logger
@@ -10,9 +12,18 @@ neighbor_num = 50
 
 
 @time_it
-def load_data() -> trimesh.Trimesh:
+def load_mesh() -> trimesh.Trimesh:
     mesh = trimesh.load_mesh('./data/saddle.obj')
     return mesh
+
+
+@time_it
+def export_ply(points: np.ndarray, normals: np.ndarray, filename: str):
+    mesh = trimesh.Trimesh()
+    mesh.vertices = points
+    if normals is not None:
+        mesh.vertex_normals = normals
+    mesh.export(filename)
 
 
 @time_it
@@ -24,18 +35,22 @@ def sample_points_even(mesh: trimesh.Trimesh, num: int) -> np.ndarray:
 @time_it
 def farthest_point_sampling(points: np.ndarray, num: int) -> np.ndarray:
     n, channel = points.shape
+    assert channel == 3
     sampled_points = np.zeros(num, dtype=int)
     distance = np.ones(n) * np.inf
 
+    def cal_distance(point: np.ndarray) -> np.ndarray:
+        return np.linalg.norm((points - point) ** 2, axis=1)
+
     # choose the farthest point from the barycenter as the first point
-    barycenter = (np.sum(points, axis=0) / n).reshape(1, channel)
-    dist = np.linalg.norm((points - barycenter) ** 2, axis=1)
+    barycenter = (np.sum(points, axis=0) / n).reshape(1, 3)
+    dist = cal_distance(barycenter)
     farthest = np.argmax(dist)
 
     # iteratively choose the farthest point from the sampled points
     for i in range(num):
         sampled_points[i] = farthest
-        dist = np.linalg.norm((points - points[farthest]) ** 2, axis=1)
+        dist = cal_distance(points[farthest])
         mask = dist < distance
         distance[mask] = dist[mask]
         farthest = np.argmax(distance)
@@ -49,12 +64,13 @@ def normal_estimation(points: np.ndarray, sampled_points: np.ndarray) -> np.ndar
     kdtree = neighbors.KDTree(points)
 
     channel = points.shape[1]
+    assert channel == 3
     normals = np.zeros(sampled_points.shape)
 
     for i in range(sampled_points.shape[0]):
         # find the nearest neighbors of each sampled point
         _, neighbor_index = kdtree.query(sampled_points[i].reshape(1, -1), k=neighbor_num)
-        neighbor_points = points[neighbor_index].reshape(neighbor_num, channel)
+        neighbor_points = points[neighbor_index].reshape(neighbor_num, 3)
 
         # # find n_components
         # model = decomposition.PCA(svd_solver='full')
@@ -72,21 +88,18 @@ def normal_estimation(points: np.ndarray, sampled_points: np.ndarray) -> np.ndar
         # logger.info('points_pca =', points_pca)
 
         # PCA to fit the plane
-        model = decomposition.PCA(n_components=channel, svd_solver='full')
+        # model = decomposition.PCA(n_components=2, svd_solver='full')
+        model = decomposition.PCA(n_components=3, svd_solver='full')
         points_fit = model.fit(neighbor_points)
 
         # normal vector is the least variance direction
         # assume normal vector roughly points in the Y direction
         # normal = np.cross(points_fit.components_[0], points_fit.components_[1])
-        normal = points_fit.components_[channel - 1]
+        normal = points_fit.components_[2]
         if normal[1] < 0:
             normal = -normal
-        normals[i] = normalize(normal)
-
-        for i in range(2):
-            dot_value = np.dot(points_fit.components_[i], points_fit.components_[i+1])
-            if dot_value > 1e-4:
-                logger.warning(f'np.dot(points_fit.components_[{i}], points_fit.components_[{i+1}]) = {dot_value}')
+        normal = normalize(normal)
+        normals[i] = normal
 
     return normals
 
@@ -105,15 +118,30 @@ def test_normals(points: np.ndarray, normals: np.ndarray):
         normal_analytical = normalize(normal_analytical)
         if np.linalg.norm(normal - normal_analytical) > loss_upper_bound:
             if np.linalg.norm(point - target_point) < 0.1:
-                logger.error('Normal estimation failed:',
-                             f'point={point}', f'normal={normal}', f'normal_analytical={normal_analytical}')
+                logger.warning('Normal estimation failed:',
+                               f'point={point}', f'normal={normal}', f'normal_analytical={normal_analytical}')
             error_num += 1
-    logger.info(f'Normal estimation failed {error_num}/{points.shape[0]} times')
+    logger.warning(f'Normal estimation failed {error_num}/{points.shape[0]} times')
 
 
 if __name__ == '__main__':
-    mesh = load_data()
+    output_dir = os.path.relpath('./output')
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 1. load and sample evenly
+    mesh = load_mesh()
     points = sample_points_even(mesh, sampled_num)
+    export_ply(points, None, os.path.join(output_dir, 'saddle_even.ply'))
+
+    # 2. farthest point sampling
     sampled_points = farthest_point_sampling(points, sampled_num_iterative)
+
+    # 3. normal estimation
     sampled_normals = normal_estimation(points, sampled_points)
+    export_ply(sampled_points, sampled_normals, os.path.join(output_dir, 'saddle_generated.ply'))
     test_normals(sampled_points, sampled_normals)
+
+    # 4. mesh curvature estimation
+    # TODO
