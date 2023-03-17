@@ -63,4 +63,6 @@ def solve(A: np.ndarray, b: np.ndarray, epsilon: np.ndarray) -> np.ndarray:
 if __name__ == '__main__':
     A, b, epsilon = load_data()
     x = solve(A, b, epsilon)
+    f = 0.5 * (np.linalg.norm(A @ x - b) ** 2)
     logger.info(f'x = {x}')
+    logger.info(f'f(x) = {f}')

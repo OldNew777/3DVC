@@ -69,7 +69,7 @@ def normal_estimation(points: np.ndarray, sampled_points: np.ndarray) -> np.ndar
 
     for i in range(sampled_points.shape[0]):
         # find the nearest neighbors of each sampled point
-        _, neighbor_index = kdtree.query(sampled_points[i].reshape(1, -1), k=neighbor_num)
+        neighbor_index = kdtree.query(sampled_points[i].reshape(1, -1), k=neighbor_num, return_distance=False)
         neighbor_points = points[neighbor_index].reshape(neighbor_num, 3)
 
         # # find n_components
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     # 3. normal estimation
     sampled_normals = normal_estimation(points, sampled_points)
     export_ply(sampled_points, sampled_normals, os.path.join(output_dir, 'saddle_generated.ply'))
-    test_normals(sampled_points, sampled_normals)
+    # test_normals(sampled_points, sampled_normals)
 
     # 4. mesh curvature estimation
     # TODO
