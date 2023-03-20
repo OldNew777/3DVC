@@ -5,6 +5,7 @@ from sklearn import neighbors, decomposition
 from func import *
 from mylogger import logger
 import trimesh
+import matplotlib.pyplot as plt
 
 sampled_num = 100000
 sampled_num_iterative = 4000
@@ -12,8 +13,8 @@ neighbor_num = 50
 
 
 @time_it
-def load_mesh() -> trimesh.Trimesh:
-    mesh = trimesh.load_mesh('./data/saddle.obj')
+def load_mesh(filename) -> trimesh.Trimesh:
+    mesh = trimesh.load_mesh(filename)
     return mesh
 
 
@@ -129,12 +130,61 @@ def test_normals(points: np.ndarray, normals: np.ndarray):
     logger.warning(f'Normal estimation failed {error_num}/{points.shape[0]} times')
 
 
+def calculate_curvatures(mesh: trimesh.Trimesh) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    # calculate the curvature of each vertex
+    n_faces = mesh.faces.shape[0]
+    max_curvatures = np.zeros(n_faces)
+    min_curvatures = np.zeros(n_faces)
+    mean_curvatures = np.zeros(n_faces)
+    gaussian_curvatures = np.zeros(n_faces)
+    for i in range(n_faces):
+        face = mesh.faces[i]
+        v = np.ndarray(shape=(3, 3))
+        vertex_normals = np.ndarray(shape=(3, 3))
+        for j in range(3):
+            v[j] = mesh.vertices[face[j]]
+            vertex_normals[j] = mesh.vertex_normals[face[j]]
+        o, delta_u, delta_v, face_normal = tangent_plane(v[0], v[1], v[2])
+        Df_T = np.array([delta_u, delta_v])
+        A = np.zeros(shape=(6, 4))
+        b = np.zeros(shape=6)
+        for j in range(3):
+            index_0 = (j + 1) % 3
+            index_1 = (j + 0) % 3
+            left_coefficient = Df_T @ (v[index_0] - v[index_1]).reshape(3, 1)
+            right_coefficient = Df_T @ (vertex_normals[index_0] - vertex_normals[index_1]).reshape(3, 1)
+            A[j * 2] = np.array([left_coefficient[0], left_coefficient[1], 0, 0])
+            A[j * 2 + 1] = np.array([0, 0, left_coefficient[0], left_coefficient[1]])
+            b[j * 2] = right_coefficient[0]
+            b[j * 2 + 1] = right_coefficient[1]
+        S = np.linalg.lstsq(A, b, rcond=None)[0].reshape(2, 2)
+        curvatures, _ = np.linalg.eig(S)
+        max_curvatures[i] = np.max(curvatures)
+        min_curvatures[i] = np.min(curvatures)
+        mean_curvatures[i] = np.mean(curvatures)
+        gaussian_curvatures[i] = np.prod(curvatures)
+    return max_curvatures, min_curvatures, mean_curvatures, gaussian_curvatures
+
+
+def calculate_curvatures_and_draw_hist(obj_name: str):
+    mesh = load_mesh(f'./data/{obj_name}.obj')
+    max_curvatures, min_curvatures, mean_curvatures, gaussian_curvatures = calculate_curvatures(mesh)
+    plt.hist(max_curvatures, bins=100)
+    plt.savefig(os.path.join(output_dir, f'{obj_name}_max_curvatures.png'))
+    plt.hist(min_curvatures, bins=100)
+    plt.savefig(os.path.join(output_dir, f'{obj_name}_min_curvatures.png'))
+    plt.hist(mean_curvatures, bins=100)
+    plt.savefig(os.path.join(output_dir, f'{obj_name}_mean_curvatures.png'))
+    plt.hist(gaussian_curvatures, bins=100)
+    plt.savefig(os.path.join(output_dir, f'{obj_name}_gaussian_curvatures.png'))
+
+
 if __name__ == '__main__':
     output_dir = os.path.relpath('./output')
     os.makedirs(output_dir, exist_ok=True)
 
     # 1. load and sample evenly
-    mesh = load_mesh()
+    mesh = load_mesh('./data/saddle.obj')
     points = sample_points_even(mesh, sampled_num)
     export_ply(points, None, os.path.join(output_dir, 'saddle_even.ply'))
 
@@ -147,4 +197,7 @@ if __name__ == '__main__':
     # test_normals(sampled_points, sampled_normals)
 
     # 4. mesh curvature estimation
-    # TODO
+    obj_name = 'sievert'
+    calculate_curvatures_and_draw_hist(obj_name)
+    obj_name = 'icosphere'
+    calculate_curvatures_and_draw_hist(obj_name)
