@@ -105,11 +105,11 @@ Use PCA method to fit 50 neighbor points around the target point with `n_compone
 ### 1
 
 $$
-   |(p+q)/2| = \sqrt{\frac{1}{2} + \frac{1}{8} + \frac{1}{8}} = \frac{\sqrt{3}}{2}	\\
+|(p+q)/2| = \sqrt{\frac{1}{2} + \frac{1}{8} + \frac{1}{8}} = \frac{\sqrt{3}}{2}	\\
    
    r = \sqrt{\frac{2}{3}} + \frac{i}{\sqrt{6}} + \frac{j}{\sqrt{6}}	\\
    
-   M(r) = 
+   R(r) = 
    \begin{bmatrix}
      \frac{2}{3} & \frac{1}{3} &  \frac{2}{3}	\\
      \frac{1}{3} & \frac{2}{3} &  -\frac{2}{3}	\\
@@ -203,7 +203,7 @@ $$
 0 & 1 & 0 \\
 \end{bmatrix},
 
-M_p = 
+R_p = 
 \begin{bmatrix}
 1 & 0 & 0 \\
 0 & 0 & -1 \\
@@ -217,7 +217,7 @@ M_p =
 -1 & 0 & 0 \\
 \end{bmatrix},
 
-M_q = 
+R_q = 
 \begin{bmatrix}
 0 & 0 & 1 \\
 0 & 1 & 0 \\
@@ -258,6 +258,89 @@ $e^{([\omega_1] + [\omega_2])} \neq e^{[\omega_1]} e^{[\omega_2]}$ in this case,
 
 #### (c)
 
+##### (i)
+
+1. Initiate $R = I$
+
+2. $$
+   \begin{aligned}
+   
+   R_2^T R_2 
+   I &= (I + [\Delta \omega])^T R_1^T R_1 (I + [\Delta \omega])	\\
+   I &= I + [\Delta \omega]^T + [\Delta \omega] + [\Delta \omega]^T [\Delta \omega]	\\
+   0 &= [\Delta \omega]^T [\Delta \omega]	\\
+   
+   \end{aligned}
+   $$
+
+   $\text{namely} \space |\Delta \omega|^2 < \epsilon$
+   $$
+   \begin{aligned}
+   
+   |R_1(I + [\Delta \omega]) X - Y|^2_F 
+   &= |R_1 [\Delta \omega] X - (Y - R_1 X)|^2_F	\\
+   &\le |R_1|_F^2 \times |[\Delta \omega] X - (R_1^{-1}Y - X)|_F^2	\\
+   &= 3 |[\Delta \omega] X - (R_1^{-1}Y - X)|_F^2
+   
+   \end{aligned}
+   $$
+   Assume $X = (x_1, x_2, ..., x_n)$, then
+   $$
+   \begin{aligned}
+   \\
+   
+   [\Delta \omega] X
+   &= ([\Delta \omega] x_1, ..., [\Delta \omega] x_n)	\\
+   &= (-[x_1] \Delta \omega, ..., -[x_n] \Delta \omega)	\\
+   &= -([x_1], ..., [x_n]) \Delta \omega	\\
+   
+   \end{aligned}
+   $$
+   Let $A' = ([x_1], ..., [x_n]), B' = X - R^{-1} Y$
+
+   And the minimized function use F-norm, which has no relationship with the shape of $A$ and $B$. Thus we can reshape $A'$ to $A$ as $(n \times 3, 3)$, reshape $B'$ to $b$ as $(n \times 3, 1)$
+
+   So the problem comes to
+   $$
+   \left\{
+   
+   \begin{aligned}
+   
+   &\text{minimize}_{\Delta \omega} & |A \Delta \omega - b|^2_2	\\
+   &\text{subject to} & |\Delta \omega|^2 < \epsilon
+   
+   \end{aligned}
+   
+   \right.
+   $$
+   
+
+3. Update R by $R = R e^{[\Delta \omega]}$
+
+4. Go to step 2
+
+
+
+##### (ii)
+
+Set $\epsilon = 1e-2$, and $|R_2 - R_1|_F \le 1e-6$ as termination condition, we get
+$$
+\begin{aligned}
+
+& R =
+\begin{bmatrix}
+-0.95173078 &  0.21671065 &  0.21735838	\\
+-0.15383912 &  0.27598814 & -0.94876964	\\
+-0.26559688 & -0.93641173 & -0.22932771	\\
+\end{bmatrix}
+\\
+
+& |RX - Y|_F^2 = 120.23340717366894
+
+\end{aligned}
+$$
+
+
 
 
 ### 4
@@ -280,12 +363,12 @@ $$
 0
 \end{bmatrix},
 
-M_{p'} = 
+R_{p'} = 
 \begin{bmatrix}
 1 & 0 & 0 \\
 0 & 0 & -1 \\
 0 & 1 & 0 \\
-\end{bmatrix} = M_p
+\end{bmatrix} = R_p
 $$
 $q' = -q$
 $$
@@ -305,12 +388,12 @@ $$
 0
 \end{bmatrix},
 
-M_{q'} = 
+R_{q'} = 
 \begin{bmatrix}
 0 & 0 & 1 \\
 0 & 1 & 0 \\
 -1 & 0 & 0 \\
-\end{bmatrix} = M_q
+\end{bmatrix} = R_q
 $$
 We can observe that $\theta' = 2\pi - \theta, \hat{\omega}' = -\hat{\omega}, \vec{\omega}' = \vec{\omega} - 2 \pi \hat{\omega}, M' = M$ for both $(p, -p), (q, -q)$
 

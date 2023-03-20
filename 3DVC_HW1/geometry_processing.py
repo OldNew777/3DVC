@@ -19,10 +19,15 @@ def load_mesh() -> trimesh.Trimesh:
 
 @time_it
 def export_ply(points: np.ndarray, normals: np.ndarray, filename: str):
+    output_dir = os.path.dirname(filename)
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
     mesh = trimesh.Trimesh()
     mesh.vertices = points
     if normals is not None:
         mesh.vertex_normals = normals
+    if os.path.exists(filename):
+        os.remove(filename)
     mesh.export(filename)
 
 
@@ -126,8 +131,6 @@ def test_normals(points: np.ndarray, normals: np.ndarray):
 
 if __name__ == '__main__':
     output_dir = os.path.relpath('./output')
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
     # 1. load and sample evenly

@@ -1,7 +1,13 @@
+from typing import Tuple
+
 import numpy as np
 from mylogger import logger
 from func import *
 import fractions
+import time
+
+import QCQP
+import geometry_processing
 
 
 def quaternion2matrix(q: np.ndarray) -> np.ndarray:
@@ -17,15 +23,15 @@ def quaternion2matrix(q: np.ndarray) -> np.ndarray:
     ])
 
 
-def theta(q0):
+def theta(q0: np.ndarray) -> float:
     return np.rad2deg(2 * np.arccos(q0))
 
 
-def omega(q):
+def omega(q: np.ndarray) -> np.ndarray:
     return np.array([q[1], q[2], q[3]]) / np.sin(np.arccos(q[0]))
 
 
-def omega_matrix(v):
+def omega_matrix(v: np.ndarray) -> np.ndarray:
     return np.array([
         [0, -v[2], v[1]],
         [v[2], 0, -v[0]],
@@ -33,20 +39,20 @@ def omega_matrix(v):
     ], dtype=float)
 
 
-def exponential_coordinate(q):
+def exponential_coordinate(q: np.ndarray):
     _theta = theta(q[0])
     _omega = omega(q)
     exp_coord = _omega * np.deg2rad(_theta)
     return _theta, _omega, exp_coord
 
 
-def exponential_coordinate2matrix(_theta, _omega):
+def exponential_coordinate2matrix(_theta: float, _omega: np.ndarray) -> np.ndarray:
     m_omega = omega_matrix(_omega)
     m = np.eye(3) + m_omega * np.sin(np.deg2rad(_theta)) + m_omega @ m_omega * (1 - np.cos(np.deg2rad(_theta)))
     return m
 
 
-if __name__ == '__main__':
+def test():
     np.set_printoptions(formatter={'all': lambda x: str(fractions.Fraction(x).limit_denominator())})
 
     p = np.array([
@@ -93,3 +99,71 @@ if __name__ == '__main__':
     logger.info(f'theta={theta_q}, omega={omega_q}, exp_coord={exp_coord_q}')
     m_q = exponential_coordinate2matrix(theta_q, omega_q)
     logger.info(f'M = {m_q}')
+
+
+def load_data() -> Tuple[int, np.ndarray, np.ndarray]:
+    data = np.load('./data/teapots.npz')
+    X = data['X'].T
+    Y = data['Y'].T
+    n = X.shape[0]
+    return n, X, Y
+
+
+@time_it
+def solve_teapot(n: int, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
+    # X, Y shape (n, 3)
+
+    # init ratation matrix
+    R = np.eye(3)
+    R_last = np.zeros((3, 3))
+    delta_omega = np.array([1., 1., 1.])
+    exp_omega = exponential_coordinate2matrix(1, delta_omega)
+
+    def f(R: np.ndarray) -> float:
+        return np.linalg.norm(X @ R.T - Y, ord='fro') ** 2
+
+    def terminated(R: np.ndarray, R_last: np.ndarray) -> bool:
+        # return False
+        return abs(f(R_last) - f(R)) <= 1e-6
+
+    def g(v: np.ndarray) -> np.ndarray:
+        # return omega_matrix(v)
+        return R @ omega_matrix(v)
+
+    # find a delta omega
+    # print every 1 second
+    epsilon = 1e-2
+    iter = 0
+    A = np.vectorize(g, signature='(3) -> (3, 3)')(X)
+    A = A.reshape(-1, 3)
+    while not terminated(R, R_last):
+        R_last = R
+        # A = np.vectorize(g, signature='(3) -> (3, 3)')(X)
+        # A = A.reshape(-1, 3)
+        # b = (X @ R.T - Y).reshape(-1, 1)
+        b = (X - Y @ R).reshape(-1, 1)
+
+        delta_omega = QCQP.solve(A, b, epsilon, 1.)
+        R = R @ exponential_coordinate2matrix(1, delta_omega)
+
+        iter += 1
+        print(f'\r[Iter: {iter:05d}] f = {f(R)}', end='')
+
+    logger.info(f'f = {f(R)}, f_last = {f(R_last)}')
+
+    return R
+
+
+if __name__ == '__main__':
+    # test()
+
+    n, X, Y = load_data()
+    geometry_processing.export_ply(X, None, './output/teapots_X.ply')
+    geometry_processing.export_ply(Y, None, './output/teapots_Y.ply')
+    R = solve_teapot(n, X, Y)
+
+    Y_calculated = X @ R.T
+    f = np.linalg.norm(Y_calculated - Y, ord='fro')
+    logger.info(f'R = {R}')
+    logger.info(f'f = {f}')
+    geometry_processing.export_ply(Y_calculated, None, './output/teapots_Y_calculated.ply')
