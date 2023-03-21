@@ -94,9 +94,54 @@ Use PCA method to fit 50 neighbor points around the target point with `n_compone
 
 ### 4.
 
+#### sievert
+
+<center class="half">
+    <img src="./data/sievert_max_curvatures.png" style="zoom:65%">
+    <img src="./data/sievert_min_curvatures.png" style="zoom:65%">
+</center>
+
+<center class="half">
+    <img src="./data/sievert_mean_curvatures.png" style="zoom:65%">
+    <img src="./data/sievert_gaussian_curvatures.png" style="zoom:65%">
+</center>
+
+
+
+#### icosphere
+
+<center class="half">
+    <img src="./data/icosphere_max_curvatures.png" style="zoom:65%">
+    <img src="./data/icosphere_min_curvatures.png" style="zoom:65%">
+</center>
+
+<center class="half">
+    <img src="./data/icosphere_mean_curvatures.png" style="zoom:65%">
+    <img src="./data/icosphere_gaussian_curvatures.png" style="zoom:65%">
+</center>
+
+All curvatures of icosphere calculated are 0. Perhaps it's because the spherical model contains too much vertices and faces, which leads to the difference of normals of neighbor faces are relatively small. and this will make the right part of the equation close to 0 due to computational precision. 
+
 
 
 ### 5. 
+
+#### saddle
+
+<center class="half">
+    <img src="./data/saddle_max_curvatures.png" style="zoom:65%">
+    <img src="./data/saddle_min_curvatures.png" style="zoom:65%">
+</center>
+
+<center class="half">
+    <img src="./data/saddle_mean_curvatures.png" style="zoom:65%">
+    <img src="./data/saddle_gaussian_curvatures.png" style="zoom:65%">
+</center>
+
+Load the model and use the original mesh vertices as the point set in normal estimation. Then establish a KDTree for query and iterate for each vertex: 
+
+1. Query 50 nearest neighbor vertices as 
+
 
 
 
@@ -314,7 +359,6 @@ $e^{([\omega_1] + [\omega_2])} \neq e^{[\omega_1]} e^{[\omega_2]}$ in this case,
    \right.
    $$
    
-
 3. Update R by $R = R e^{[\Delta \omega]}$
 
 4. Go to step 2

@@ -130,7 +130,8 @@ def test_normals(points: np.ndarray, normals: np.ndarray):
     logger.warning(f'Normal estimation failed {error_num}/{points.shape[0]} times')
 
 
-def calculate_curvatures(mesh: trimesh.Trimesh) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+@time_it
+def calculate_curvatures(mesh: trimesh.Trimesh, normals) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     # calculate the curvature of each vertex
     n_faces = mesh.faces.shape[0]
     max_curvatures = np.zeros(n_faces)
@@ -143,7 +144,7 @@ def calculate_curvatures(mesh: trimesh.Trimesh) -> Tuple[np.ndarray, np.ndarray,
         vertex_normals = np.ndarray(shape=(3, 3))
         for j in range(3):
             v[j] = mesh.vertices[face[j]]
-            vertex_normals[j] = mesh.vertex_normals[face[j]]
+            vertex_normals[j] = mesh.vertex_normals[face[j]] if normals is None else normals[face[j]]
         o, delta_u, delta_v, face_normal = tangent_plane(v[0], v[1], v[2])
         Df_T = np.array([delta_u, delta_v])
         A = np.zeros(shape=(6, 4))
@@ -166,17 +167,24 @@ def calculate_curvatures(mesh: trimesh.Trimesh) -> Tuple[np.ndarray, np.ndarray,
     return max_curvatures, min_curvatures, mean_curvatures, gaussian_curvatures
 
 
-def calculate_curvatures_and_draw_hist(obj_name: str):
-    mesh = load_mesh(f'./data/{obj_name}.obj')
-    max_curvatures, min_curvatures, mean_curvatures, gaussian_curvatures = calculate_curvatures(mesh)
+def calculate_curvatures_and_draw_hist(obj_name: str, mesh: trimesh.Trimesh, normals: np.ndarray = None):
+    max_curvatures, min_curvatures, mean_curvatures, gaussian_curvatures = calculate_curvatures(mesh, normals)
     plt.hist(max_curvatures, bins=100)
+    plt.title(f'{obj_name} max curvatures')
     plt.savefig(os.path.join(output_dir, f'{obj_name}_max_curvatures.png'))
+    plt.clf()
     plt.hist(min_curvatures, bins=100)
+    plt.title(f'{obj_name} min curvatures')
     plt.savefig(os.path.join(output_dir, f'{obj_name}_min_curvatures.png'))
+    plt.clf()
     plt.hist(mean_curvatures, bins=100)
+    plt.title(f'{obj_name} mean curvatures')
     plt.savefig(os.path.join(output_dir, f'{obj_name}_mean_curvatures.png'))
+    plt.clf()
     plt.hist(gaussian_curvatures, bins=100)
+    plt.title(f'{obj_name} gaussian curvatures')
     plt.savefig(os.path.join(output_dir, f'{obj_name}_gaussian_curvatures.png'))
+    plt.clf()
 
 
 if __name__ == '__main__':
@@ -184,8 +192,8 @@ if __name__ == '__main__':
     os.makedirs(output_dir, exist_ok=True)
 
     # 1. load and sample evenly
-    mesh = load_mesh('./data/saddle.obj')
-    points = sample_points_even(mesh, sampled_num)
+    mesh_saddle = load_mesh('./data/saddle.obj')
+    points = sample_points_even(mesh_saddle, sampled_num)
     export_ply(points, None, os.path.join(output_dir, 'saddle_even.ply'))
 
     # 2. farthest point sampling
@@ -198,6 +206,12 @@ if __name__ == '__main__':
 
     # 4. mesh curvature estimation
     obj_name = 'sievert'
-    calculate_curvatures_and_draw_hist(obj_name)
+    mesh = load_mesh(f'./data/{obj_name}.obj')
+    calculate_curvatures_and_draw_hist(obj_name, mesh)
     obj_name = 'icosphere'
-    calculate_curvatures_and_draw_hist(obj_name)
+    mesh = load_mesh(f'./data/{obj_name}.obj')
+    calculate_curvatures_and_draw_hist(obj_name, mesh)
+
+    # 5. mesh curvature estimation using normal estimation
+    obj_name = 'saddle'
+    # TODO
