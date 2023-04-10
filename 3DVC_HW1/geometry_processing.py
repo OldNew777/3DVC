@@ -6,6 +6,7 @@ from func import *
 from mylogger import logger
 import trimesh
 import matplotlib.pyplot as plt
+import tqdm
 
 sampled_num = 100000
 sampled_num_iterative = 4000
@@ -54,7 +55,7 @@ def farthest_point_sampling(points: np.ndarray, num: int) -> np.ndarray:
     farthest = np.argmax(dist)
 
     # iteratively choose the farthest point from the sampled points
-    for i in range(num):
+    for i in tqdm.tqdm(range(num)):
         sampled_points[i] = farthest
         dist = cal_distance(points[farthest])
         mask = dist < distance
@@ -73,7 +74,7 @@ def normal_estimation(points: np.ndarray, sampled_points: np.ndarray) -> np.ndar
     assert channel == 3
     normals = np.zeros(sampled_points.shape)
 
-    for i in range(sampled_points.shape[0]):
+    for i in tqdm.tqdm(range(sampled_points.shape[0])):
         # find the nearest neighbors of each sampled point
         neighbor_index = kdtree.query(sampled_points[i].reshape(1, -1), k=neighbor_num, return_distance=False)
         neighbor_points = points[neighbor_index].reshape(neighbor_num, 3)
@@ -138,7 +139,7 @@ def calculate_curvatures(mesh: trimesh.Trimesh, normals) -> Tuple[np.ndarray, np
     min_curvatures = np.zeros(n_faces)
     mean_curvatures = np.zeros(n_faces)
     gaussian_curvatures = np.zeros(n_faces)
-    for i in range(n_faces):
+    for i in tqdm.tqdm(range(n_faces)):
         face = mesh.faces[i]
         v = np.ndarray(shape=(3, 3))
         vertex_normals = np.ndarray(shape=(3, 3))
@@ -168,6 +169,7 @@ def calculate_curvatures(mesh: trimesh.Trimesh, normals) -> Tuple[np.ndarray, np
 
 
 def calculate_curvatures_and_draw_hist(obj_name: str, mesh: trimesh.Trimesh, normals: np.ndarray = None):
+    mesh = trimesh.Trimesh(vertices=mesh.vertices, faces=mesh.faces)
     max_curvatures, min_curvatures, mean_curvatures, gaussian_curvatures = calculate_curvatures(mesh, normals)
     plt.hist(max_curvatures, bins=100)
     plt.title(f'{obj_name} max curvatures')
@@ -208,10 +210,11 @@ if __name__ == '__main__':
     obj_name = 'sievert'
     mesh = load_mesh(f'./data/{obj_name}.obj')
     calculate_curvatures_and_draw_hist(obj_name, mesh)
+
     obj_name = 'icosphere'
     mesh = load_mesh(f'./data/{obj_name}.obj')
     calculate_curvatures_and_draw_hist(obj_name, mesh)
 
-    # 5. mesh curvature estimation using normal estimation
-    obj_name = 'saddle'
-    # TODO
+    # # 5. mesh curvature estimation using normal estimation
+    # obj_name = 'saddle'
+    # # TODO

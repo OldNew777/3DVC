@@ -78,17 +78,17 @@ $$
 
 ### 1. Sample 100K points uniformly on the surface
 
-<img src="data/saddle_even.jpg" alt="saddle_even" style="zoom: 50%;" />
+<img src="data/saddle_even.jpg" alt="saddle_even" style="zoom: 45%;" />
 
 ### 2. Use iterative farthest point sampling method to sample 4K points from the 100K uniform samples
 
-<img src="data/saddle_generated.jpg" alt="saddle_generated" style="zoom: 50%;" />
+<img src="data/saddle_generated.jpg" alt="saddle_generated" style="zoom: 45%;" />
 
 ### 3. Normal estimation
 
 Use PCA method to fit 50 neighbor points around the target point with `n_components=3`. The first 2 components represent the 2 directions with larger variance, namely the fitted plane. The 3rd component with the smallest variance represent the fitted normal. 
 
-<img src="data/saddle_normal.jpg" alt="saddle_normal" style="zoom:50%;" />
+<img src="data/saddle_normal.jpg" alt="saddle_normal" style="zoom:45%;" />
 
 
 
@@ -97,13 +97,13 @@ Use PCA method to fit 50 neighbor points around the target point with `n_compone
 #### sievert
 
 <center class="half">
-    <img src="./data/sievert_max_curvatures.png" style="zoom:65%">
-    <img src="./data/sievert_min_curvatures.png" style="zoom:65%">
+    <img src="./data/sievert_max_curvatures.png" style="zoom:45%">
+    <img src="./data/sievert_min_curvatures.png" style="zoom:45%">
 </center>
 
 <center class="half">
-    <img src="./data/sievert_mean_curvatures.png" style="zoom:65%">
-    <img src="./data/sievert_gaussian_curvatures.png" style="zoom:65%">
+    <img src="./data/sievert_mean_curvatures.png" style="zoom:45%">
+    <img src="./data/sievert_gaussian_curvatures.png" style="zoom:45%">
 </center>
 
 
@@ -111,36 +111,17 @@ Use PCA method to fit 50 neighbor points around the target point with `n_compone
 #### icosphere
 
 <center class="half">
-    <img src="./data/icosphere_max_curvatures.png" style="zoom:65%">
-    <img src="./data/icosphere_min_curvatures.png" style="zoom:65%">
+    <img src="./data/icosphere_max_curvatures.png" style="zoom:45%">
+    <img src="./data/icosphere_min_curvatures.png" style="zoom:45%">
 </center>
 
 <center class="half">
-    <img src="./data/icosphere_mean_curvatures.png" style="zoom:65%">
-    <img src="./data/icosphere_gaussian_curvatures.png" style="zoom:65%">
+    <img src="./data/icosphere_mean_curvatures.png" style="zoom:45%">
+    <img src="./data/icosphere_gaussian_curvatures.png" style="zoom:45%">
 </center>
-
-All curvatures of icosphere calculated are 0. Perhaps it's because the spherical model contains too much vertices and faces, which leads to the difference of normals of neighbor faces are relatively small. and this will make the right part of the equation close to 0 due to computational precision. 
-
 
 
 ### 5. 
-
-#### saddle
-
-<center class="half">
-    <img src="./data/saddle_max_curvatures.png" style="zoom:65%">
-    <img src="./data/saddle_min_curvatures.png" style="zoom:65%">
-</center>
-
-<center class="half">
-    <img src="./data/saddle_mean_curvatures.png" style="zoom:65%">
-    <img src="./data/saddle_gaussian_curvatures.png" style="zoom:65%">
-</center>
-
-Load the model and use the original mesh vertices as the point set in normal estimation. Then establish a KDTree for query and iterate for each vertex: 
-
-1. Query 50 nearest neighbor vertices as 
 
 
 
