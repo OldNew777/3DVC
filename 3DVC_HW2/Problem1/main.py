@@ -1,4 +1,5 @@
 import os
+os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '1'
 import warnings
 
 import hydra
@@ -101,28 +102,28 @@ def render_images(
         # TODO (1): Visualize xy grid using vis_grid
         if cam_idx == 0 and file_prefix == '':
             xy_vis = vis_grid(xy_grid, image_size)
-            plt.imshow(xy_vis)
-            plt.show()
-            plt.clf()
-            plt.imsave('outputs/grid_vis.png', xy_vis)
+            # plt.imshow(xy_vis)
+            # plt.show()
+            # plt.clf()
+            plt.imsave('images/grid_vis.png', xy_vis)
 
         # TODO (1): Visualize rays using vis_rays
         if cam_idx == 0 and file_prefix == '':
             ray_vis = vis_rays(ray_bundle, image_size)
-            plt.imshow(ray_vis)
-            plt.show()
-            plt.clf()
-            plt.imsave('outputs/ray_vis.png', ray_vis)
+            # plt.imshow(ray_vis)
+            # plt.show()
+            # plt.clf()
+            plt.imsave('images/ray_vis.png', ray_vis)
 
         # TODO (2): Implement point sampling along rays in sampler.py
         sample_points = model.sampler(ray_bundle).sample_points.reshape(-1, 3).unsqueeze(0)
 
         # TODO (2): Use render_points to visualize sample points as point cloud
         if cam_idx == 0 and file_prefix == '':
-            sample_vis = render_points('outputs/point_vis.png', sample_points, image_size)
-            plt.imshow(sample_vis)
-            plt.show()
-            plt.clf()
+            sample_vis = render_points('images/point_vis.png', sample_points, image_size)
+            # plt.imshow(sample_vis)
+            # plt.show()
+            # plt.clf()
 
         # TODO (4): Implement rendering in renderer.py
         out = model(ray_bundle)
@@ -134,6 +135,7 @@ def render_images(
             ).detach().cpu()
         )
         all_images.append(image)
+        print(f'Image {cam_idx} rendered, feature.shape={image.shape}')
 
         # TODO (4) (optional): Visualize depth
         if cam_idx == 2 and file_prefix == '':
@@ -143,7 +145,12 @@ def render_images(
             plt.imshow(depth_vis)
             plt.show()
             plt.clf()
-            plt.imsave('outputs/depth_vis.png', depth_vis)
+            # RGB BGR
+            cv2.imwrite('images/depth_vis.exr', cv2.cvtColor(depth_vis, cv2.COLOR_GRAY2BGR))
+
+            plt.imshow(image)
+            plt.show()
+            plt.clf()
 
         # Save
         if save:

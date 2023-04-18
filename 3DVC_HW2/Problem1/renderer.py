@@ -23,12 +23,14 @@ class VolumeRenderer(torch.nn.Module):
             eps: float = 1e-10
     ):
         # TODO (4): Compute transmittance using the equation described in the README
-        weights = torch.exp(-rays_density * deltas)
+        t = torch.exp(-rays_density * deltas)
+        T = torch.concat((torch.ones(size=(t.shape[0], 1, t.shape[2]), device=t.device),
+                          torch.cumprod(t, dim=1)[:, :-1, :]), dim=1)
 
         # TODO (4): Compute weight used for rendering from transmittance and density
-        weights[..., 1:] *= weights[..., :-1].clone()
+        weights = T * (1 - t)
 
-        return weights
+        return weights, T, t
 
     def _aggregate(
             self,
@@ -36,10 +38,7 @@ class VolumeRenderer(torch.nn.Module):
             rays_feature: torch.Tensor
     ):
         # TODO (4): Aggregate (weighted sum of) features using weights
-        print("weights", weights.shape)
-        print("rays_feature", rays_feature.shape)
         feature = torch.sum(weights * rays_feature, dim=1)
-        print("feature", feature.shape)
 
         return feature
 
@@ -50,13 +49,14 @@ class VolumeRenderer(torch.nn.Module):
             ray_bundle,
     ):
         B = ray_bundle.shape[0]
-        print("B", B)
+        print("\nB", B)
 
         # Process the chunks of rays.
         chunk_outputs = []
 
         for chunk_start in range(0, B, self._chunk_size):
-            cur_ray_bundle = ray_bundle[chunk_start:chunk_start + self._chunk_size]
+            print("chunk_start", chunk_start)
+            cur_ray_bundle = ray_bundle[chunk_start : min(chunk_start + self._chunk_size, B)]
 
             # Sample points along the ray
             cur_ray_bundle = sampler(cur_ray_bundle)
@@ -78,22 +78,34 @@ class VolumeRenderer(torch.nn.Module):
             )[..., None]
 
             # Compute aggregation weights
-            weights = self._compute_weights(
+            weights, T, t = self._compute_weights(
                 deltas.view(-1, n_pts, 1),
                 density.view(-1, n_pts, 1)
             )
 
             # TODO (4): Render (color) features using weights
-            feature = self._aggregate(weights, feature)
+            feature = self._aggregate(weights, feature.view(-1, n_pts, 3))
 
             # TODO (4): Render depth map
-            weights = weights[:, :100, :]
-            depth_values = depth_values[:, :100]
-            print("depth_values.shape", depth_values.shape)
-            print("delta.shape", deltas.shape)
-            depth = self._aggregate(weights, depth_values)
-            print("depth.shape", depth.shape)
-            exit(0)
+            depth = torch.inf * torch.ones(size=(weights.shape[0],), device=weights.device)
+
+            # # method 1
+            # index = torch.argmin(T, dim=1).squeeze()
+            # T = T[torch.arange(depth_values.shape[0]), index, 0]
+            # select_cond = T < 0.02
+            # index = index[select_cond]
+            # depth[select_cond] = depth_values[torch.arange(depth_values.shape[0])[select_cond], index]
+
+            # method 2
+            T[T >= 1] = -torch.inf
+            select_cond = T != -torch.inf
+            t /= torch.sum(torch.mul(t, select_cond), dim=1, keepdim=True)
+            t[~select_cond] = 0
+            t = t.squeeze()
+            depth = self._aggregate(t, depth_values)
+            depth[depth == 0] = torch.inf
+
+            # depth = self._aggregate(1 - T, depth_values)
 
             # Return
             cur_out = {
