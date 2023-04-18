@@ -87,25 +87,24 @@ class VolumeRenderer(torch.nn.Module):
             feature = self._aggregate(weights, feature.view(-1, n_pts, 3))
 
             # TODO (4): Render depth map
-            depth = torch.inf * torch.ones(size=(weights.shape[0],), device=weights.device)
+            # default_depth = depth_values.max()
+            default_depth = torch.inf
+            depth = default_depth * torch.ones(size=(weights.shape[0],), device=weights.device)
 
-            # # method 1
-            # index = torch.argmin(T, dim=1).squeeze()
-            # T = T[torch.arange(depth_values.shape[0]), index, 0]
-            # select_cond = T < 0.02
-            # index = index[select_cond]
-            # depth[select_cond] = depth_values[torch.arange(depth_values.shape[0])[select_cond], index]
+            # method 1
+            index = torch.argmin(T, dim=1).squeeze()
+            T = T[torch.arange(depth_values.shape[0]), index, 0]
+            select_cond = T < 0.02
+            index = index[select_cond]
+            depth[select_cond] = depth_values[torch.arange(depth_values.shape[0])[select_cond], index]
 
-            # method 2
-            T[T >= 1] = -torch.inf
-            select_cond = T != -torch.inf
-            t /= torch.sum(torch.mul(t, select_cond), dim=1, keepdim=True)
-            t[~select_cond] = 0
-            t = t.squeeze()
-            depth = self._aggregate(t, depth_values)
-            depth[depth == 0] = torch.inf
-
-            # depth = self._aggregate(1 - T, depth_values)
+            # # method 2
+            # select_cond = T[T < 1]
+            # t /= torch.sum(torch.mul(t, select_cond), dim=1, keepdim=True)
+            # t[~select_cond] = 0
+            # t = t.squeeze()
+            # depth = self._aggregate(t, depth_values)
+            # depth[depth == 0] = default_depth
 
             # Return
             cur_out = {

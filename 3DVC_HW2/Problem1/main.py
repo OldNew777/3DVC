@@ -145,12 +145,9 @@ def render_images(
             plt.imshow(depth_vis)
             plt.show()
             plt.clf()
+            plt.imsave('images/depth_vis.png', depth_vis)
             # RGB BGR
-            cv2.imwrite('images/depth_vis.exr', cv2.cvtColor(depth_vis, cv2.COLOR_GRAY2BGR))
-
-            plt.imshow(image)
-            plt.show()
-            plt.clf()
+            cv2.imwrite('images/depth_vis.exr', depth_vis)
 
         # Save
         if save:
