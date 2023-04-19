@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from sklearn import neighbors
 import mcubes
+import itertools
 
 from geometry_processing import *
 from mylogger import logger
@@ -232,22 +233,49 @@ def mls(point_cloud: PointCloud, p: np.ndarray, values: np.ndarray,
         # logger.debug(f'f_value={f_value}')
         return f_value
 
+    # # method 1
     # vertices, triangles = mcubes.marching_cubes_func(
     #     tuple(aabb[0]), tuple(aabb[1]),
     #     voxel.voxel_length[0], voxel.voxel_length[1], voxel.voxel_length[2],
     #     cal_mls, 16)
 
-    f_values = np.zeros(tuple(voxel.voxel_length + 1))
     size = voxel.voxel_length + 1
     x_grid = np.linspace(aabb[0][0], aabb[1][0], size[0])
     y_grid = np.linspace(aabb[0][1], aabb[1][1], size[1])
     z_grid = np.linspace(aabb[0][2], aabb[1][2], size[2])
 
+    # method 2
+    f_values = np.zeros(tuple(voxel.voxel_length + 1))
     for index1 in tqdm(range(np.cumprod(size, axis=0)[-1]), ncols=80):
         i = index1 // (size[1] * size[2])
         j = (index1 % (size[1] * size[2])) // size[2]
         k = index1 % size[2]
         f_values[i, j, k] = cal_mls(x_grid[i], y_grid[j], z_grid[k])
+
+    # # method 3
+    # def cal_mls(x: np.ndarray):
+    #     index_neighbors = kdtree.query(x.reshape(1, 3), k=config.n_neighbors, return_distance=False)[0]
+    #     v_neighbors = p[index_neighbors]
+    #     value_neighbors = values[index_neighbors]
+    #
+    #     # logger.debug(f'x={x}')
+    #     theta = np.sqrt(config.theta_fn(np.linalg.norm(v_neighbors - x.reshape(1, 3), axis=1, ord=2), config.h_theta))
+    #     # logger.debug(f'theta={theta}')
+    #     B_x = theta.reshape(-1, 1) * np.array([config.b_fn(v) for v in v_neighbors])
+    #     # logger.debug(f'theta.reshape(-1, 1)={theta.reshape(-1, 1)}')
+    #     # logger.debug(f'B_x={B_x}')
+    #     d = value_neighbors * theta
+    #     # logger.debug(f'd={d}')
+    #     a = np.linalg.lstsq(B_x, d, rcond=None)[0].reshape(-1)
+    #     # logger.debug(f'a={a}')
+    #     f_value = np.dot(config.b_fn(x), a)
+    #     # logger.debug(f'f_value={f_value}')
+    #     return f_value
+    #
+    # grid = np.array(list(itertools.product(x_grid, y_grid, z_grid)))
+    # logger.debug(f'grid.shape={grid.shape}')
+    # logger.debug(f'grid={grid}')
+    # f_values = np.vectorize(cal_mls, signature='(3)->()')(grid).reshape(size)
 
     vertices, triangles = mcubes.marching_cubes(-f_values, 0)
 
