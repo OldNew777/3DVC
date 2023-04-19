@@ -1,6 +1,8 @@
 import numpy as np
 from sklearn import neighbors
 import torch
+import shutil
+import os
 
 from mylogger import logger
 from geometry_processing import *
@@ -25,7 +27,16 @@ if __name__ == '__main__':
 
     filename = 'bunny.ply'
     point_cloud = PointCloud.from_ply(filename)
-    kdtree = neighbors.KDTree(point_cloud.v)
-    point_cloud, p, values = get_constraints(point_cloud, kdtree, 0.01)
-    mls(point_cloud, kdtree, p, values)
+    point_cloud, p, values = get_constraints(point_cloud, 0.01)
 
+    config = Config()
+    os.makedirs(config.output_dir, exist_ok=True)
+    for k in [0, 1, 2]:
+        for h in [0.1, 0.01, 0.001]:
+            for n_neighbors in [50, 200, 500, 1000]:
+                config.k = k
+                config.h = h
+                config.n_neighbors = n_neighbors
+                logger.info('')
+                logger.info(f'{config}')
+                mls(point_cloud, p, values, config)

@@ -8,8 +8,9 @@ from func import *
 
 
 @time_it
-def get_constraints(point_cloud: PointCloud, kdtree: neighbors.KDTree, epsilon: float = 0.01)\
+def get_constraints(point_cloud: PointCloud, epsilon: float = 0.01)\
         -> Tuple[PointCloud, np.ndarray, np.ndarray]:
+    kdtree = neighbors.KDTree(point_cloud.v)
 
     def get_neighbor_constraint(index: int, epsilon: float) -> Tuple[np.ndarray, float]:
         ep = epsilon
