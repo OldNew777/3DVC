@@ -238,9 +238,10 @@ def mls(point_cloud: PointCloud, p: np.ndarray, values: np.ndarray,
     y_grid = np.linspace(aabb[0][1], aabb[1][1], size[1])
     z_grid = np.linspace(aabb[0][2], aabb[1][2], size[2])
 
-    for index1 in tqdm(range(np.cumprod(size, axis=0)[-1])):
-        index3 = voxel.index1toindex3(index1)
-        i, j, k = index3[0], index3[1], index3[2]
+    for index1 in tqdm(range(np.cumprod(size, axis=0)[-1]), ncols=80):
+        i = index1 // (size[1] * size[2])
+        j = (index1 % (size[1] * size[2])) // size[2]
+        k = index1 % size[2]
         f_values[i, j, k] = cal_mls(x_grid[i], y_grid[j], z_grid[k])
 
     vertices, triangles = mcubes.marching_cubes(-f_values, 0)
