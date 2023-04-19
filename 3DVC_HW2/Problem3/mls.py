@@ -75,6 +75,8 @@ def get_b_fn(b_fn_k: int):
 class VoxelGrid:
     def __init__(self, aabb):
         self.aabb = aabb
+        self.v = []
+        self.value = []
 
         self.b_fn = get_b_fn(config.b_fn_k)
         self.theta_fn = get_theta_fn()
