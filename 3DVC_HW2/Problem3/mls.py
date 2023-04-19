@@ -71,6 +71,7 @@ class Config:
         ans.b_fn_k = self.b_fn_k
         ans.h_theta = self.h_theta
         ans.n_neighbors = self.n_neighbors
+        ans.voxel_length_basic = self.voxel_length_basic
         return ans
 
     def generate_fn(self):
@@ -193,6 +194,7 @@ def mls(point_cloud: PointCloud, p: np.ndarray, values: np.ndarray,
     global config
     config = config_t.copy()
     config.generate_fn()
+    logger.debug(config, config_t)
 
     aabb = np.array([np.min(point_cloud.v, axis=0), np.max(point_cloud.v, axis=0)])
     logger.info(f'bounding box: {aabb}')
