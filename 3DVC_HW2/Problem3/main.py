@@ -30,14 +30,16 @@ if __name__ == '__main__':
     point_cloud, p, values = get_constraints(point_cloud, 0.01)
 
     config_t = Config()
-    os.makedirs(config_t.output_dir, exist_ok=True)
-    for n_neighbors in [50, 200, 500, 1000]:
-        for h in [0.1, 0.01, 0.001]:
-            for k in [0, 1, 2]:
-                config_t.b_fn_k = k
-                config_t.h_theta = h
-                config_t.n_neighbors = n_neighbors
-                logger.info('')
-                logger.info(f'k = {k}, h = {h}, n_neighbors = {n_neighbors}')
-                logger.info(f'{config_t}')
-                mls(point_cloud, p, values, config_t)
+    for fn in [gaussian_fn, wendland_fn, singular_fn]:
+        config_t.theta_fn = fn
+        config_t.output_dir = 'outputs-' + fn.__name__
+        os.makedirs(config_t.output_dir, exist_ok=True)
+        for n_neighbors in [50, 200, 500, 1000]:
+            for h in [0.1, 0.01, 0.001]:
+                for k in [0, 1, 2]:
+                    config_t.b_fn_k = k
+                    config_t.h_theta = h
+                    config_t.n_neighbors = n_neighbors
+                    logger.info('')
+                    logger.info(f'{config_t}')
+                    mls(point_cloud, p, values, config_t)

@@ -23,10 +23,6 @@ def singular_fn(r, epsilon: float):
     return 1 / (r ** 2 + epsilon ** 2)
 
 
-def get_theta_fn():
-    return gaussian_fn
-
-
 def a_num(k: int):
     return int((3 ** (k + 1) - 1) / 2)
 
@@ -63,7 +59,7 @@ class Config:
         self.voxel_length_basic = 30
 
         self.output_dir = 'outputs'
-        self.theta_fn = None
+        self.theta_fn = gaussian_fn
         self.b_fn = None
 
     def copy(self):
@@ -72,14 +68,17 @@ class Config:
         ans.h_theta = self.h_theta
         ans.n_neighbors = self.n_neighbors
         ans.voxel_length_basic = self.voxel_length_basic
+
+        ans.output_dir = self.output_dir
+        ans.theta_fn = self.theta_fn
+        ans.b_fn = self.b_fn
         return ans
 
     def generate_fn(self):
-        self.theta_fn = get_theta_fn()
         self.b_fn = b_fn_dict[self.b_fn_k]
 
     def __str__(self):
-        return f'Config(b_fn_k={self.b_fn_k}, h_theta={self.h_theta}, n_neighbors={self.n_neighbors})'
+        return f'Config(theta_fn={self.theta_fn.__name__}, b_fn_k={self.b_fn_k}, h_theta={self.h_theta}, n_neighbors={self.n_neighbors})'
 
     def __repr__(self):
         return str(self)
@@ -194,7 +193,11 @@ def mls(point_cloud: PointCloud, p: np.ndarray, values: np.ndarray,
     global config
     config = config_t.copy()
     config.generate_fn()
-    logger.debug(config, config_t)
+
+    filename = f'bunny-mls-k={config.b_fn_k}-h={config.h_theta}-n_neighbors={config.n_neighbors}.obj'
+    filename = os.path.join(config.output_dir, filename)
+    if os.path.exists(filename):
+        return
 
     aabb = np.array([np.min(point_cloud.v, axis=0), np.max(point_cloud.v, axis=0)])
     logger.info(f'bounding box: {aabb}')
@@ -247,5 +250,5 @@ def mls(point_cloud: PointCloud, p: np.ndarray, values: np.ndarray,
         f_values[i, j, k] = cal_mls(x_grid[i], y_grid[j], z_grid[k])
 
     vertices, triangles = mcubes.marching_cubes(-f_values, 0)
-    filename = f'bunny-mls-k={config.b_fn_k}-h={config.h_theta}-n_neighbors={config.n_neighbors}.obj'
-    mcubes.export_obj(vertices, triangles, os.path.join(config.output_dir, filename))
+
+    mcubes.export_obj(vertices, triangles, filename)
