@@ -25,7 +25,7 @@ def get_constraints(point_cloud: PointCloud, kdtree: neighbors.KDTree, epsilon: 
     n_new = np.zeros(shape=(2 * point_cloud.v.shape[0], 3), dtype=float)
     color_new = np.zeros(shape=(2 * point_cloud.v.shape[0], 3), dtype=int)
     p = np.zeros(shape=(3 * point_cloud.v.shape[0], 3), dtype=float)
-    values = np.zeros(shape=(3 * point_cloud.v.shape[0], 1), dtype=float)
+    values = np.zeros(shape=(3 * point_cloud.v.shape[0]), dtype=float)
     for i in tqdm(range(len(point_cloud)), ncols=80):
         # constraint (a)
         p[3 * i], values[3 * i] = point_cloud.v[i], 0
