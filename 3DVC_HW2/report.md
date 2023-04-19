@@ -8,7 +8,7 @@
 
 Rendering output see in `Problem1/images`
 
-### 1
+### 1. Ray sampling
 
 ![grid_vis](Problem1/images/grid_vis.png)
 
@@ -16,13 +16,13 @@ Rendering output see in `Problem1/images`
 
 
 
-### 2
+### 2. Point sampling
 
 ![point_vis](Problem1/images/point_vis.png)
 
 
 
-### 3
+### 3. Theory of transmittance calculation
 
 $$
 \begin{aligned}
@@ -37,7 +37,7 @@ $$
 
 
 
-### 4
+### 4. Rendering
 
 ![render_cube](Problem1/images/render_cube.gif)
 
@@ -47,11 +47,38 @@ $$
 
 ## 2. Single Image to 3D
 
-### 1.
+### 1
+
+
+
+
+
+### 2. Network design
+
+
 
 
 
 
 ## 3. Surface Reconstruction
 
-### 1
+### 1. MLS constraints
+
+Set $\epsilon = 0.01$
+
+The outer green points represent constraints (b), and the inner red points represent constraints (c)
+
+![constraints-visualization](Problem3/constraints-visualization.png)
+
+
+
+### 2. MLS interpolation
+
+
+
+
+
+### 3. Marching Cube
+
+
+

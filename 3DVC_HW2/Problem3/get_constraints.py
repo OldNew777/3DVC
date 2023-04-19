@@ -1,11 +1,15 @@
 import numpy as np
-from sklearn import neighbors, decomposition
+from sklearn import neighbors
+from tqdm import tqdm
 
 from geometry_processing import *
+from mylogger import logger
+from func import *
 
 
-def get_constraints(point_cloud: PointCloud, epsilon: float = 0.01):
-    kdtree = neighbors.KDTree(point_cloud.v)
+@time_it
+def get_constraints(point_cloud: PointCloud, kdtree: neighbors.KDTree, epsilon: float = 0.01)\
+        -> Tuple[PointCloud, np.ndarray, np.ndarray]:
 
     def get_neighbor_constraint(index: int, epsilon: float) -> Tuple[np.ndarray, float]:
         ep = epsilon
@@ -22,7 +26,7 @@ def get_constraints(point_cloud: PointCloud, epsilon: float = 0.01):
     color_new = np.zeros(shape=(2 * point_cloud.v.shape[0], 3), dtype=int)
     p = np.zeros(shape=(3 * point_cloud.v.shape[0], 3), dtype=float)
     values = np.zeros(shape=(3 * point_cloud.v.shape[0], 1), dtype=float)
-    for i in range(len(point_cloud)):
+    for i in tqdm(range(len(point_cloud)), ncols=80):
         # constraint (a)
         p[3 * i], values[3 * i] = point_cloud.v[i], 0
 
@@ -41,9 +45,3 @@ def get_constraints(point_cloud: PointCloud, epsilon: float = 0.01):
     point_cloud += PointCloud(v_new, n_new, color_new)
     point_cloud.export_ply('bunny-constraints.ply')
     return point_cloud, p, values
-
-
-if __name__ == '__main__':
-    filename = 'bunny.ply'
-    point_cloud = PointCloud.from_ply(filename)
-    point_cloud, p, values = get_constraints(point_cloud, 0.01)
