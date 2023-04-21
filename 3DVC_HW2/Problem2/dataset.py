@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 import cv2
-import open3d as o3d
+import trimesh
 
 
 class CubeDataset(Dataset):
@@ -35,8 +35,8 @@ class CubeDataset(Dataset):
         img_np = img.transpose(2, 0, 1) / 255  # [3, 256, 256]
 
         # read point cloud
-        pcd = o3d.io.read_point_cloud(pcd_path)
-        points_np = np.array(pcd.points)  # [1024, 3]
+        pcd = trimesh.load(pcd_path)
+        points_np = np.array(pcd.vertices)  # [1024, 3]
 
         # convert to tensors
         img_torch = torch.from_numpy(img_np.astype(np.float32)).to(self.device)

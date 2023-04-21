@@ -69,3 +69,6 @@ class PointCloud:
                     f'{self.v[i][0]} {self.v[i][1]} {self.v[i][2]} '
                     + (f'{self.n[i][0]} {self.n[i][1]} {self.n[i][2]} ' if normal_exist else '') +
                     f'{self.color[i][0]} {self.color[i][1]} {self.color[i][2]}\n')
+
+        # mesh = trimesh.Trimesh(vertices=self.v, vertex_normals=self.n if normal_exist else None, vertex_colors=self.color)
+        # mesh.export(filename)
