@@ -235,6 +235,19 @@ def evaluate(model=None):
     max_loss_idx = np.argmax(loss_vec)
     print(f'Max loss = {max_loss_idx}, {loss_vec[max_loss_idx]}')
 
+    json_dict = {
+        'loss_vec': loss_vec,
+        'min_loss': {
+            'index': int(min_loss_idx),
+            'value': int(loss_vec[min_loss_idx])
+        },
+        'max_loss': {
+            'index': int(max_loss_idx),
+            'value': int(loss_vec[max_loss_idx])
+        },
+    }
+    json.dump(json_dict, open(os.path.join(config.output_dir, 'eval_loss.json'), 'w'), indent=4)
+
 
 if __name__ == "__main__":
     if len(sys.argv) == 1 or sys.argv[1] == 'train':
