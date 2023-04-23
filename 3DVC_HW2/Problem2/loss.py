@@ -1,6 +1,5 @@
 import torch
 import torch
-from mylogger import logger
 
 
 class CDLoss(torch.nn.Module):

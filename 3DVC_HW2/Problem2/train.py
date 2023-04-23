@@ -8,7 +8,6 @@ import os
 from dataset import CubeDataset
 from model import Img2PcdModel
 from loss import *
-from mylogger import logger
 
 
 def get_device():
@@ -22,18 +21,18 @@ def test_loss():
     torch.cuda.manual_seed(234897)
     n = 3
     b = torch.rand(size=(n, 3)) * 2 - 1
-    logger.info(f'b = {b}')
+    print(f'b = {b}')
     for loss_fn in [CDLoss(), HDLoss()]:
         a = torch.rand(size=(n, 3)) * 2 - 1
         a = a.to(b.device)
         a.requires_grad = True
 
-        logger.info('')
-        logger.info('loss_fn =', loss_fn.__class__.__name__)
-        logger.info('init a =', a)
+        print('')
+        print('loss_fn =', loss_fn.__class__.__name__)
+        print('init a =', a)
 
         loss = loss_fn(a, b)
-        logger.info('loss =', loss)
+        print('loss =', loss)
 
         optimizer = torch.optim.Adam([a], lr=1e-1)
         for i in range(3000):
@@ -41,9 +40,9 @@ def test_loss():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        logger.info('loss =', loss)
-        logger.info('a =', a)
-        logger.info('a.grad =', a.grad)
+        print('loss =', loss)
+        print('a =', a)
+        print('a.grad =', a.grad)
         trimesh.Trimesh(vertices=a.detach().cpu().numpy()).export(os.path.join('outputs', f'{loss_fn.__class__.__name__}.ply'))
 
     exit(0)
@@ -89,15 +88,12 @@ def main():
     # Optimizer:
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
 
-    logger.info('Initialized. Start training...')
+    print('Initialized. Start training...')
 
     # Training process:
     for epoch_idx in tqdm(range(epoch), ncols=80, desc='Epoch'):
         model.train()
         for batch_idx, (data_img, data_pcd) in enumerate(training_dataloader):
-            # logger.debug(f'data_img.shape = {data_img.shape}')
-            # logger.debug(f'data_pcd.shape = {data_pcd.shape}')
-
             data_img = torch.ones(size=(batch_size, 3, 192, 256), device=device)
 
             # forward
@@ -108,8 +104,11 @@ def main():
 
             # backward
             optimizer.zero_grad()
-            loss.backward()
+            loss.sum().backward(retain_graph=True)
             optimizer.step()
+
+    # Save the model:
+    torch.save(model.state_dict(), os.path.join(output_dir, 'model.pth'))
 
     # Final evaluation process:
     model.eval()
@@ -118,7 +117,7 @@ def main():
         pred = model(data_img, data_r)
         # compute loss
         loss = loss_fn(pred, data_pcd)
-        logger.info(f'Batch {batch_idx}: loss = {loss.item()}')
+        print(f'Batch {batch_idx}: loss = {loss.item()}')
 
     pass
 

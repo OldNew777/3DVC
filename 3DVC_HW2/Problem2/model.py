@@ -1,8 +1,6 @@
 import torch
 from torch import nn
 
-from mylogger import logger
-
 
 class Img2PcdModel(nn.Module):
     """
@@ -87,7 +85,7 @@ class Img2PcdModel(nn.Module):
 
         # TODO
         self.additional = torch.nn.Sequential(
-            torch.nn.Linear(in_features=512, out_features=2048),
+            torch.nn.Linear(in_features=6144, out_features=2048),
             torch.nn.ReLU(),
             torch.nn.Linear(in_features=2048, out_features=2048),
             # TODO: use different weight_decay and add them
@@ -104,7 +102,7 @@ class Img2PcdModel(nn.Module):
         ]
 
         self.predictor = torch.nn.Sequential(
-            torch.nn.Linear(in_features=512, out_features=self.n_points * 3),
+            torch.nn.Linear(in_features=6144, out_features=self.n_points * 3),
             torch.nn.ReLU(),
         )
 
@@ -120,13 +118,10 @@ class Img2PcdModel(nn.Module):
             x = x_channel4
 
         for index, l in enumerate(self.encoder0):
-            logger.debug(l)
             x = l(x)
-            logger.debug(x.shape)
+
+        x = x.reshape(shape[0], -1)
         x = self.predictor(x)
-        logger.debug(x.shape)
         x = x.reshape(shape[0], -1, 3)
-        logger.debug(x.shape)
-        exit(0)
 
         return x
