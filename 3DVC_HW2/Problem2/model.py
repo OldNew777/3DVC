@@ -85,7 +85,7 @@ class Img2PcdModel(nn.Module):
 
         # TODO
         self.additional = torch.nn.Sequential(
-            torch.nn.Linear(in_features=6144, out_features=2048),
+            torch.nn.Linear(in_features=8192, out_features=2048),
             torch.nn.ReLU(),
             torch.nn.Linear(in_features=2048, out_features=2048),
             # TODO: use different weight_decay and add them
@@ -102,7 +102,7 @@ class Img2PcdModel(nn.Module):
         ]
 
         self.predictor = torch.nn.Sequential(
-            torch.nn.Linear(in_features=6144, out_features=self.n_points * 3),
+            torch.nn.Linear(in_features=8192, out_features=self.n_points * 3),
             torch.nn.ReLU(),
         )
 
