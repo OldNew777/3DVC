@@ -69,7 +69,7 @@ class Config:
         self.loss_fn = CDLoss()
         self.batch_size = 8
         self.epoch = 300
-        self.learning_rate = 1e-2
+        self.learning_rate = 1e-4
         self.save_interval = 20
 
         # Data lists:
