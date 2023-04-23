@@ -113,7 +113,7 @@ def get_latest_epoch_filename():
 
 def save_model(model, filename, loss_epoch_vec):
     if type(filename) is int:
-        filename = os.path.join(config.model_path, str(filename))
+        filename = os.path.join(config.model_path, f'model-{filename}.pth')
     torch.save(model.state_dict(), filename)
     json.dump(loss_epoch_vec, open(os.path.join(config.output_dir, 'training_loss.json'), 'w'), indent=4)
 
