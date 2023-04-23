@@ -1,12 +1,14 @@
 import sys
+import shutil
+import os
 
 import torch
+from torch.utils.data import DataLoader
 import numpy as np
 import trimesh
-from torch.utils.data import DataLoader
 from tqdm import tqdm
-import os
 import cv2
+
 
 from dataset import CubeDataset
 from model import Img2PcdModel
@@ -68,7 +70,7 @@ class Config:
         self.loss_fn = CDLoss()
         self.batch_size = 8
         self.epoch = 300
-        self.learning_rate = 3e-4
+        self.learning_rate = 1e-2
 
         # Data lists:
         # select certain numbers randomly from 0 to 99
@@ -136,6 +138,9 @@ def evaluate(model=None):
     model.eval()
     loss_vec = []
     output_dir = os.path.join(config.output_dir, 'eval')
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
     for batch_idx, (data_img, data_pcd) in enumerate(test_dataloader):
         # forward
         pred = model(data_img)
