@@ -1,11 +1,13 @@
 import torch
 import numpy as np
+import trimesh
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import os
 
 from dataset import CubeDataset
 from model import Img2PcdModel
-from loss import CDLoss, HDLoss
+from loss import *
 from mylogger import logger
 
 
@@ -16,20 +18,53 @@ def get_device():
         return torch.device("cpu")
 
 
+def test_loss():
+    torch.cuda.manual_seed(234897)
+    n = 3
+    b = torch.rand(size=(n, 3)) * 2 - 1
+    logger.info(f'b = {b}')
+    for loss_fn in [CDLoss(), HDLoss()]:
+        a = torch.rand(size=(n, 3)) * 2 - 1
+        a = a.to(b.device)
+        a.requires_grad = True
+
+        logger.info('')
+        logger.info('loss_fn =', loss_fn.__class__.__name__)
+        logger.info('init a =', a)
+
+        loss = loss_fn(a, b)
+        logger.info('loss =', loss)
+
+        optimizer = torch.optim.Adam([a], lr=1e-1)
+        for i in range(3000):
+            loss = loss_fn(a, b)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        logger.info('loss =', loss)
+        logger.info('a =', a)
+        logger.info('a.grad =', a.grad)
+        trimesh.Trimesh(vertices=a.detach().cpu().numpy()).export(os.path.join('outputs', f'{loss_fn.__class__.__name__}.ply'))
+
+    exit(0)
+
+
 def main():
     # device
     device = get_device()
-    torch.set_default_device(get_device())
-    torch.device(get_device())
+    torch.set_default_device(device)
 
     # data path
     cube_data_path = 'cube_dataset/clean'
     output_dir = 'outputs'
+    os.makedirs(output_dir, exist_ok=True)
 
     # Training hyper-parameters:
     batch_size = 8
     epoch = 100
     learning_rate = 1e-3
+
+    # test_loss()
 
     # Data lists:
     # select certain numbers randomly from 0 to 99
@@ -51,7 +86,7 @@ def main():
     # loss_fn = HDLoss()
 
     # Optimizer:
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
 
     logger.info('Initialized. Start training...')
 
