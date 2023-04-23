@@ -73,8 +73,9 @@ class Config:
         # Data lists:
         # select certain numbers randomly from 0 to 99
         np.random.seed(1234)
-        self.training_cube_list = np.random.choice(100, 50, replace=False)
+        self.training_cube_list = np.random.choice(100, 10, replace=False)
         self.test_cube_list = np.setdiff1d(np.arange(100), self.training_cube_list)
+        self.test_cube_list = np.random.choice(self.test_cube_list, 10, replace=False)
         self.view_idx_list = np.arange(16)
 
 
