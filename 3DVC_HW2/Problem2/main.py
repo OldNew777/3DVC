@@ -1,11 +1,12 @@
 import sys
+import os
+import shutil
 
 import torch
 import numpy as np
 import trimesh
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import os
 import cv2
 
 from dataset import CubeDataset
@@ -67,15 +68,16 @@ class Config:
         # hyper-parameters
         self.loss_fn = CDLoss()
         self.batch_size = 8
-        self.epoch = 100
-        self.learning_rate = 3e-4
+        self.epoch = 300
+        self.learning_rate = 1e-2
+        self.save_interval = 20
 
         # Data lists:
         # select certain numbers randomly from 0 to 99
         np.random.seed(1234)
-        self.training_cube_list = np.random.choice(100, 10, replace=False)
+        self.training_cube_list = np.random.choice(100, 30, replace=False)
         self.test_cube_list = np.setdiff1d(np.arange(100), self.training_cube_list)
-        self.test_cube_list = np.random.choice(self.test_cube_list, 10, replace=False)
+        self.test_cube_list = np.random.choice(self.test_cube_list, 30, replace=False)
         self.view_idx_list = np.arange(16)
 
 
@@ -114,6 +116,8 @@ def train():
                 optimizer.step()
 
             t.set_postfix(loss=loss.item())
+            if (epoch_idx + 1) % config.save_interval == 0:
+                torch.save(model.state_dict(), os.path.join(config.output_dir, f'model.pth'))
 
     # Save the model:
     torch.save(model.state_dict(), os.path.join(config.output_dir, 'model.pth'))
@@ -136,7 +140,10 @@ def evaluate(model=None):
     model.eval()
     loss_vec = []
     output_dir = os.path.join(config.output_dir, 'eval')
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)
+
     for batch_idx, (data_img, data_pcd) in enumerate(test_dataloader):
         # forward
         pred = model(data_img)
@@ -163,7 +170,7 @@ def evaluate(model=None):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 0 or sys.argv[1] == 'train':
+    if len(sys.argv) == 1 or sys.argv[1] == 'train':
         model = train()
         evaluate(model)
     elif sys.argv[1] == 'eval':
