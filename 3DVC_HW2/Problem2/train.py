@@ -75,8 +75,9 @@ def main():
     # Preperation of datasets and dataloaders:
     training_dataset = CubeDataset(cube_data_path, training_cube_list, view_idx_list, device=device)
     test_dataset = CubeDataset(cube_data_path, test_cube_list, view_idx_list, device=device)
-    training_dataloader = DataLoader(training_dataset, batch_size=batch_size, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+    generator = torch.Generator(device=device)
+    training_dataloader = DataLoader(training_dataset, batch_size=batch_size, shuffle=True, generator=generator)
+    test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, generator=generator)
 
     # Network:
     model = Img2PcdModel(device=device)
@@ -94,6 +95,11 @@ def main():
     for epoch_idx in tqdm(range(epoch), ncols=80, desc='Epoch'):
         model.train()
         for batch_idx, (data_img, data_pcd) in enumerate(training_dataloader):
+            # logger.debug(f'data_img.shape = {data_img.shape}')
+            # logger.debug(f'data_pcd.shape = {data_pcd.shape}')
+
+            data_img = torch.ones(size=(batch_size, 3, 192, 256), device=device)
+
             # forward
             pred = model(data_img)
 
