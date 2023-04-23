@@ -94,10 +94,11 @@ def train():
     # Optimizer:
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate, weight_decay=1e-5)
 
-    print('Initialized. Start training...')
     # Training process:
-    for epoch_idx in range(config.epoch):
-        with tqdm(total=config.epoch) as t:
+    with tqdm(range(config.epoch)) as t:
+        for epoch_idx in t:
+            t.set_description(f'Epoch {epoch_idx}/{config.epoch}')
+
             model.train()
             for batch_idx, (data_img, data_pcd) in enumerate(training_dataloader):
                 # forward
@@ -111,15 +112,12 @@ def train():
                 loss.backward(retain_graph=True)
                 optimizer.step()
 
-            t.set_description(f'Epoch {epoch_idx}/{config.epoch}')
             t.set_postfix(loss=loss.item())
-            t.update(epoch_idx)
 
     # Save the model:
     torch.save(model.state_dict(), os.path.join(config.output_dir, 'model.pth'))
 
-    # evaluate
-    evaluate(model)
+    return model
 
 
 def evaluate(model=None):
@@ -129,12 +127,15 @@ def evaluate(model=None):
 
     # Network:
     if model is None:
-        model = torch.load(os.path.join(config.output_dir, 'model.pth')).to(config.device)
+        state_dict = torch.load(os.path.join(config.output_dir, 'model.pth'))
+        model = Img2PcdModel(device=config.device)
+        model.load_state_dict(state_dict)
 
     # Final evaluation process:
     model.eval()
     loss_vec = []
     output_dir = os.path.join(config.output_dir, 'eval')
+    os.makedirs(output_dir, exist_ok=True)
     for batch_idx, (data_img, data_pcd) in enumerate(test_dataloader):
         # forward
         pred = model(data_img)
@@ -153,9 +154,16 @@ def evaluate(model=None):
     loss = np.mean(loss_vec)
     print(f'Mean loss = {loss}')
 
+    min_loss_idx = np.argmin(loss_vec)
+    print(f'Min loss = {min_loss_idx}, {loss_vec[min_loss_idx]}')
+
+    max_loss_idx = np.argmax(loss_vec)
+    print(f'Max loss = {max_loss_idx}, {loss_vec[max_loss_idx]}')
+
 
 if __name__ == "__main__":
-    if sys.argv[1] == 'train':
-        train()
+    if len(sys.argv) == 0 or sys.argv[1] == 'train':
+        model = train()
+        evaluate(model)
     elif sys.argv[1] == 'eval':
         evaluate()
