@@ -67,14 +67,15 @@ class Config:
         # hyper-parameters
         self.loss_fn = CDLoss()
         self.batch_size = 8
-        self.epoch = 100
+        self.epoch = 300
         self.learning_rate = 3e-4
 
         # Data lists:
         # select certain numbers randomly from 0 to 99
         np.random.seed(1234)
-        self.training_cube_list = np.random.choice(100, 50, replace=False)
+        self.training_cube_list = np.random.choice(100, 30, replace=False)
         self.test_cube_list = np.setdiff1d(np.arange(100), self.training_cube_list)
+        self.test_cube_list = np.random.choice(self.test_cube_list, 30, replace=False)
         self.view_idx_list = np.arange(16)
 
 
@@ -96,8 +97,10 @@ def train():
 
     print('Initialized. Start training...')
     # Training process:
-    for epoch_idx in range(config.epoch):
-        with tqdm(total=config.epoch) as t:
+    with tqdm(range(config.epoch)) as t:
+        for epoch_idx in t:
+            t.set_description(f'Epoch {epoch_idx}/{config.epoch}')
+
             model.train()
             for batch_idx, (data_img, data_pcd) in enumerate(training_dataloader):
                 # forward
@@ -111,9 +114,7 @@ def train():
                 loss.backward(retain_graph=True)
                 optimizer.step()
 
-            t.set_description(f'Epoch {epoch_idx}/{config.epoch}')
             t.set_postfix(loss=loss.item())
-            t.update(epoch_idx)
 
     # Save the model:
     torch.save(model.state_dict(), os.path.join(config.output_dir, 'model.pth'))

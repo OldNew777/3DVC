@@ -10,8 +10,6 @@ class Img2PcdModel(nn.Module):
     def __init__(self, device):
         super(Img2PcdModel, self).__init__()
 
-        self.n_points = 256
-
         self.encoder0 = [
             # 0, x0
             torch.nn.Sequential(
@@ -91,7 +89,7 @@ class Img2PcdModel(nn.Module):
             # TODO: use different weight_decay and add them
             torch.nn.Linear(in_features=2048, out_features=1024),
             torch.nn.ReLU(),
-            torch.nn.Linear(in_features=1024, out_features=self.n_points * 3),
+            torch.nn.Linear(in_features=1024, out_features=256 * 3),
             torch.nn.ReLU(),
         )
 
@@ -102,7 +100,7 @@ class Img2PcdModel(nn.Module):
         ]
 
         self.predictor = torch.nn.Sequential(
-            torch.nn.Linear(in_features=8192, out_features=self.n_points * 3),
+            torch.nn.Linear(in_features=8192, out_features=256 * 3),
             torch.nn.ReLU(),
         )
 
