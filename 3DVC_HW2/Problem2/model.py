@@ -15,23 +15,23 @@ class Img2PcdModel(nn.Module):
         # CNN to get feature vector
         self.encoder = nn.Sequential(
             nn.Conv2d(4, 64, 4, 2, 1),  # (B, 64, 128, 128)
-            nn.LeakyReLU(),
+            nn.Tanh(),
             nn.MaxPool2d(2, 2),  # (B, 64, 64, 64)
             nn.Conv2d(64, 128, 4, 2, 1),  # (B, 128, 32, 32)
-            nn.LeakyReLU(),
+            nn.Tanh(),
             nn.MaxPool2d(2, 2),  # (B, 128, 16, 16)
             nn.Conv2d(128, 256, 4, 2, 1),  # (B, 256, 8, 8)
-            nn.LeakyReLU(),
+            nn.Tanh(),
             nn.MaxPool2d(2, 2),  # (B, 256, 4, 4)
         )
 
         # MLP to get point cloud
         self.decoder = nn.Sequential(
-            nn.Linear(256 * 4 * 4, 1024 * 3),  # (B, 1024 * 3)
+            nn.Linear(256 * 4 * 4, 1024 * 3 + 256 * 2),  # (B, 1024 * 3 + 256 * 2)
             nn.Tanh(),
-            nn.Linear(1024 * 3, 1024 * 3),  # (B, 1024 * 3)
+            nn.Linear(1024 * 3 + 256 * 2, 1024 * 3 + 256),  # (B, 1024 * 3 + 256)
             nn.Tanh(),
-            nn.Linear(1024 * 3, 1024 * 3),  # (B, 1024 * 3)
+            nn.Linear(1024 * 3 + 256, 1024 * 3),  # (B, 1024 * 3)
         )
 
         self.device = device

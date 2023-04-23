@@ -1,6 +1,8 @@
+import json
 import sys
 import os
 import shutil
+import json
 
 import torch
 import numpy as np
@@ -64,6 +66,9 @@ class Config:
         self.cube_data_path = 'cube_dataset/clean'
         self.output_dir = 'outputs'
         os.makedirs(self.output_dir, exist_ok=True)
+        # self.model_path = os.path.join(self.output_dir, 'model.pth')
+        self.model_path = os.path.join('D:/OldNew/3DVC/image2pcd/model')
+        os.makedirs(self.model_path, exist_ok=True)
 
         # hyper-parameters
         self.loss_fn = CDLoss()
@@ -84,6 +89,43 @@ class Config:
 config = Config()
 
 
+def get_latest_epoch_filename():
+    model_filename_list = [filename for filename in os.listdir(config.model_path)
+                           if filename.endswith('.pth')]
+    model_epoch_idx = -1
+    index = -1
+    for i in range(len(model_filename_list)):
+        model_filename = model_filename_list[i]
+        if not model_filename.startswith('model-'):
+            continue
+        model_filename = model_filename.rstrip('.pth').lstrip('model-')
+        try:
+            epoch_idx = int(model_filename)
+            if epoch_idx > model_epoch_idx:
+                model_epoch_idx = epoch_idx
+                index = i
+        except:
+            continue
+    if index == -1:
+        return None
+    return os.path.join(config.model_path, model_filename_list[index]), model_epoch_idx
+
+
+def save_model(model, filename, loss_epoch_vec):
+    if type(filename) is int:
+        filename = os.path.join(config.model_path, str(filename))
+    torch.save(model.state_dict(), filename)
+    json.dump(loss_epoch_vec, open(os.path.join(config.output_dir, 'training_loss.json'), 'w'), indent=4)
+
+
+def load_model(filename):
+    state_dict = torch.load(filename)
+    model = Img2PcdModel(device=config.device)
+    model.load_state_dict(state_dict)
+    loss_epoch_vec = json.load(open(os.path.join(config.output_dir, 'training_loss.json'), 'r'))
+    return model, loss_epoch_vec
+
+
 def train():
     # Preperation of datasets and dataloaders:
     training_dataset = CubeDataset(config.cube_data_path, config.training_cube_list, config.view_idx_list,
@@ -92,23 +134,34 @@ def train():
                                      generator=config.generator)
 
     # Network:
-    model = Img2PcdModel(device=config.device)
+    model_filename, start_epoch = get_latest_epoch_filename()
+    if model_filename is not None:
+        print(f'Loading model from file "{model_filename}"', )
+        model, loss_epoch_vec = load_model(model_filename)
+    else:
+        print('Creating new model')
+        model = Img2PcdModel(device=config.device)
+        loss_epoch_vec = []
 
     # Optimizer:
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate, weight_decay=1e-5)
 
     # Training process:
-    with tqdm(range(config.epoch)) as t:
+    with tqdm(range(start_epoch, config.epoch)) as t:
         for epoch_idx in t:
             t.set_description(f'Epoch {epoch_idx}/{config.epoch}')
 
             model.train()
+            loss_sum = torch.tensor(0.0, device=config.device)
+            loss_count = torch.tensor(0, device=config.device, dtype=torch.int32)
             for batch_idx, (data_img, data_pcd) in enumerate(training_dataloader):
                 # forward
                 pred = model(data_img)
 
                 # compute loss
                 loss = config.loss_fn(pred, data_pcd).mean()
+                loss_sum += loss * data_img.shape[0]
+                loss_count += data_img.shape[0]
 
                 # backward
                 optimizer.zero_grad()
@@ -116,11 +169,12 @@ def train():
                 optimizer.step()
 
             t.set_postfix(loss=loss.item())
+            loss_epoch_vec.append(loss_sum.item() / loss_count.item())
             if (epoch_idx + 1) % config.save_interval == 0:
-                torch.save(model.state_dict(), os.path.join(config.output_dir, f'model.pth'))
+                save_model(model, epoch_idx + 1, loss_epoch_vec)
 
     # Save the model:
-    torch.save(model.state_dict(), os.path.join(config.output_dir, 'model.pth'))
+    save_model(model, config.epoch, loss_epoch_vec)
 
     return model
 
@@ -132,9 +186,13 @@ def evaluate(model=None):
 
     # Network:
     if model is None:
-        state_dict = torch.load(os.path.join(config.output_dir, 'model.pth'))
-        model = Img2PcdModel(device=config.device)
-        model.load_state_dict(state_dict)
+        model_filename, _ = get_latest_epoch_filename()
+        if model_filename is not None:
+            print(f'Loading model from file "{model_filename}"', )
+            model, _ = load_model(model_filename)
+        else:
+            print('No model found')
+            return
 
     # Final evaluation process:
     model.eval()
@@ -154,8 +212,17 @@ def evaluate(model=None):
         print(f'Batch {batch_idx}: loss = {loss.item()}')
 
         # save the output point cloud
+        # eval output
+        filename = os.path.join(output_dir, f'{batch_idx}-eval.ply')
+        v = pred[0].detach().cpu().numpy()
+        color = np.ones_like(v) * np.array([255, 0, 0])
+        trimesh.Trimesh(vertices=v, vertex_colors=color).export(filename)
+        # ref
         filename = os.path.join(output_dir, f'{batch_idx}.ply')
-        trimesh.Trimesh(vertices=pred[0].detach().cpu().numpy()).export(filename)
+        v = data_pcd[0].detach().cpu().numpy()
+        color = np.ones_like(v) * np.array([0, 255, 0])
+        trimesh.Trimesh(vertices=v, vertex_colors=color).export(filename)
+        # RGB image
         filename = os.path.join(output_dir, f'{batch_idx}.png')
         cv2.imwrite(filename, data_img[0].detach().cpu().numpy().transpose(1, 2, 0) * 255)
 
