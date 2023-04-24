@@ -6,102 +6,36 @@ class Img2PcdModel(nn.Module):
     """
     A neural network of single image to 3D.
     """
+    
+    @classmethod
+    def activation_func(cls):
+        return nn.LeakyReLU(2e-1)
 
     def __init__(self, device):
         super(Img2PcdModel, self).__init__()
 
-        self.encoder0 = [
-            # 0, x0
-            torch.nn.Sequential(
-                torch.nn.Conv2d(in_channels=4, out_channels=16, kernel_size=3, stride=1, padding=1),
-                torch.nn.ReLU(),
-                torch.nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1),
-                torch.nn.ReLU(),
-                torch.nn.Conv2d(in_channels=16, out_channels=32, kernel_size=5, stride=2, padding=1),
-                torch.nn.ReLU()
-            ),
-            # 1, x1
-            torch.nn.Sequential(
-                torch.nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, stride=1, padding=1),
-                torch.nn.ReLU(),
-                torch.nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, stride=1, padding=1),
-                torch.nn.ReLU()
-            ),
-            # 2, x2
-            torch.nn.Sequential(
-                torch.nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=2, padding=1),
-                torch.nn.ReLU(),
-                torch.nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1),
-                torch.nn.ReLU(),
-                torch.nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1),
-                torch.nn.ReLU()
-            ),
-            # 3, x3
-            torch.nn.Sequential(
-                torch.nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=2, padding=1),
-                torch.nn.ReLU(),
-                torch.nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1),
-                torch.nn.ReLU(),
-                torch.nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1),
-                torch.nn.ReLU()
-            ),
-            # 4, x4
-            torch.nn.Sequential(
-                torch.nn.Conv2d(in_channels=128, out_channels=256, kernel_size=5, stride=2, padding=2),
-                torch.nn.ReLU(),
-                torch.nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, stride=1, padding=1),
-                torch.nn.ReLU(),
-                torch.nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, stride=1, padding=1),
-                torch.nn.ReLU()
-            ),
-            # 5, x5
-            torch.nn.Sequential(
-                torch.nn.Conv2d(in_channels=256, out_channels=512, kernel_size=5, stride=2, padding=2),
-                torch.nn.ReLU(),
-                torch.nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=1),
-                torch.nn.ReLU(),
-                torch.nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=1),
-                torch.nn.ReLU(),
-                torch.nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=1),
-                torch.nn.ReLU()
-            ),
-            # 5, output
-            torch.nn.Sequential(
-                torch.nn.Conv2d(in_channels=512, out_channels=512, kernel_size=5, stride=2, padding=2),
-                torch.nn.ReLU(),
-            )
-        ]
+        # init (B, 4, 256, 256)
 
-        self.encoder0todecoder = [
-            None,
-            torch.nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, stride=1, padding=1),
-            torch.nn.Conv2d(in_channels=64, out_channels=32, kernel_size=3, stride=1, padding=1),
-            torch.nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, stride=1, padding=1),
-            torch.nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, stride=1, padding=1),
-            torch.nn.Conv2d(in_channels=512, out_channels=256, kernel_size=3, stride=1, padding=1),
-        ]
-
-        # TODO
-        self.additional = torch.nn.Sequential(
-            torch.nn.Linear(in_features=8192, out_features=2048),
-            torch.nn.ReLU(),
-            torch.nn.Linear(in_features=2048, out_features=2048),
-            # TODO: use different weight_decay and add them
-            torch.nn.Linear(in_features=2048, out_features=1024),
-            torch.nn.ReLU(),
-            torch.nn.Linear(in_features=1024, out_features=256 * 3),
-            torch.nn.ReLU(),
+        # CNN to get feature vector
+        self.encoder = nn.Sequential(
+            nn.Conv2d(4, 64, 4, 2, 1),  # (B, 64, 128, 128)
+            self.activation_func(),
+            nn.MaxPool2d(2, 2),  # (B, 64, 64, 64)
+            nn.Conv2d(64, 128, 4, 2, 1),  # (B, 128, 32, 32)
+            self.activation_func(),
+            nn.MaxPool2d(2, 2),  # (B, 128, 16, 16)
+            nn.Conv2d(128, 256, 4, 2, 1),  # (B, 256, 8, 8)
+            self.activation_func(),
+            nn.MaxPool2d(2, 2),  # (B, 256, 4, 4)
         )
 
-        self.decoder = [
-            torch.nn.Sequential(
-                torch.nn.ConvTranspose2d(in_channels=512, out_channels=256, kernel_size=3, stride=2, padding=1),
-            ),
-        ]
-
-        self.predictor = torch.nn.Sequential(
-            torch.nn.Linear(in_features=8192, out_features=256 * 3),
-            torch.nn.ReLU(),
+        # MLP to get point cloud
+        self.decoder = nn.Sequential(
+            nn.Linear(256 * 4 * 4, 1024 * 3 + 256 * 2),  # (B, 1024 * 3 + 256 * 2)
+            nn.Tanh(),
+            nn.Linear(1024 * 3 + 256 * 2, 1024 * 3 + 256),  # (B, 1024 * 3 + 256)
+            nn.Tanh(),
+            nn.Linear(1024 * 3 + 256, 1024 * 3),  # (B, 1024 * 3)
         )
 
         self.device = device
@@ -115,11 +49,9 @@ class Img2PcdModel(nn.Module):
             shape = x_channel4.shape
             x = x_channel4
 
-        for index, l in enumerate(self.encoder0):
-            x = l(x)
-
-        x = x.reshape(shape[0], -1)
-        x = self.predictor(x)
-        x = x.reshape(shape[0], -1, 3)
+        x = self.encoder(x)  # (B, 256, 4, 4)
+        x = x.reshape(shape[0], -1)  # (B, 256 * 4 * 4)
+        x = self.decoder(x)  # (B, 1024 * 3)
+        x = x.reshape(shape[0], -1, 3)  # (B, 1024, 3)
 
         return x
