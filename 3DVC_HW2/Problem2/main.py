@@ -62,27 +62,37 @@ class Config:
         torch.set_default_device(self.device)
         self.generator = torch.Generator(device=self.device)
 
-        # data path
-        self.cube_data_path = 'cube_dataset/clean'
-        self.output_dir = 'outputs'
-        os.makedirs(self.output_dir, exist_ok=True)
-        # self.model_path = os.path.join(self.output_dir, 'model.pth')
-        self.model_path = os.path.join('D:/OldNew/3DVC/image2pcd/model')
-        os.makedirs(self.model_path, exist_ok=True)
-
         # hyper-parameters
         self.loss_fn = CDLoss()
         self.batch_size = 8
-        self.epoch = 300
+        self.epoch = 1000
         self.learning_rate = 1e-4
-        self.save_interval = 20
+        self.save_interval = 50
+
+        # data path
+        self.dataset = 'clean'
+        self.cube_data_path = f'cube_dataset/{self.dataset}'
+        activation_func = Img2PcdModel.activation_func()
+        activation_func_name = activation_func.__class__.__name__
+        self.output_dir = f'D:/OldNew/3DVC/image2pcd/outputs-{activation_func_name}'
+        if activation_func_name == torch.nn.LeakyReLU.__name__ and \
+                activation_func.negative_slope != torch.nn.LeakyReLU().negative_slope:
+            self.output_dir += f'-{activation_func.negative_slope}'
+        self.output_dir += f'-step-{self.loss_fn.__class__.__name__}-{self.dataset}'
+        os.makedirs(self.output_dir, exist_ok=True)
+        self.eval_dir = os.path.join(self.output_dir, 'eval')
+        if os.path.exists(self.eval_dir):
+            shutil.rmtree(self.eval_dir)
+        os.makedirs(self.eval_dir, exist_ok=True)
+        self.model_path = os.path.join(self.output_dir, 'model')
+        os.makedirs(self.model_path, exist_ok=True)
 
         # Data lists:
         # select certain numbers randomly from 0 to 99
         np.random.seed(1234)
-        self.training_cube_list = np.random.choice(100, 30, replace=False)
+        self.training_cube_list = np.random.choice(100, 80, replace=False)
         self.test_cube_list = np.setdiff1d(np.arange(100), self.training_cube_list)
-        self.test_cube_list = np.random.choice(self.test_cube_list, 30, replace=False)
+        self.test_cube_list = np.random.choice(self.test_cube_list, 20, replace=False)
         self.view_idx_list = np.arange(16)
 
 
@@ -107,7 +117,7 @@ def get_latest_epoch_filename():
         except:
             continue
     if index == -1:
-        return None
+        return None, 0
     return os.path.join(config.model_path, model_filename_list[index]), model_epoch_idx
 
 
@@ -165,7 +175,7 @@ def train():
 
                 # backward
                 optimizer.zero_grad()
-                loss.backward(retain_graph=True)
+                loss.backward()
                 optimizer.step()
 
             t.set_postfix(loss=loss.item())
@@ -197,10 +207,6 @@ def evaluate(model=None):
     # Final evaluation process:
     model.eval()
     loss_vec = []
-    output_dir = os.path.join(config.output_dir, 'eval')
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
-    os.makedirs(output_dir, exist_ok=True)
 
     for batch_idx, (data_img, data_pcd) in enumerate(test_dataloader):
         # forward
@@ -213,17 +219,17 @@ def evaluate(model=None):
 
         # save the output point cloud
         # eval output
-        filename = os.path.join(output_dir, f'{batch_idx}-eval.ply')
+        filename = os.path.join(config.eval_dir, f'{batch_idx}-eval.ply')
         v = pred[0].detach().cpu().numpy()
         color = np.ones_like(v) * np.array([255, 0, 0])
         trimesh.Trimesh(vertices=v, vertex_colors=color).export(filename)
         # ref
-        filename = os.path.join(output_dir, f'{batch_idx}.ply')
+        filename = os.path.join(config.eval_dir, f'{batch_idx}.ply')
         v = data_pcd[0].detach().cpu().numpy()
         color = np.ones_like(v) * np.array([0, 255, 0])
         trimesh.Trimesh(vertices=v, vertex_colors=color).export(filename)
         # RGB image
-        filename = os.path.join(output_dir, f'{batch_idx}.png')
+        filename = os.path.join(config.eval_dir, f'{batch_idx}.png')
         cv2.imwrite(filename, data_img[0].detach().cpu().numpy().transpose(1, 2, 0) * 255)
 
     loss = np.mean(loss_vec)
@@ -239,12 +245,13 @@ def evaluate(model=None):
         'loss_vec': loss_vec,
         'min_loss': {
             'index': int(min_loss_idx),
-            'value': int(loss_vec[min_loss_idx])
+            'value': float(loss_vec[min_loss_idx])
         },
         'max_loss': {
             'index': int(max_loss_idx),
-            'value': int(loss_vec[max_loss_idx])
+            'value': float(loss_vec[max_loss_idx])
         },
+        'mean_loss': float(loss),
     }
     json.dump(json_dict, open(os.path.join(config.output_dir, 'eval_loss.json'), 'w'), indent=4)
 

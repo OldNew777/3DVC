@@ -103,7 +103,15 @@ $$
 
 ### 2. Network design
 
+Different with that in the slides, I use Chamfer Distance as below
+$$
+CD(S_1, S_2) = \frac{1}{|S_1|} \sum_{x \in S_1} { \min_{y \in S_2} { ||x - y||^2_2 } } + \frac{1}{|S_2|} \sum_{y \in S_2} { \min_{x \in S_1} { ||y - x||^2_2 } }
+$$
+to make the loss better scaled. 
 
+
+
+From my point of view, HD loss is less used in practice because it fully consists of $\max/\min$ function. As a result, let's say we are optimizing point clouds $S$ to $S_{target}$ directly with HD loss. when the loss backward, very few parameters of the predicted point clouds ordinates will have grad, which may largely slow down the optimizing speed.  
 
 
 
@@ -142,7 +150,7 @@ $$
 $$
 $h \in (0.1, 0.01, 0.001)$
 
-n_neighbors $\in (50, 200, 500, 1000)$
+$N_{neighbors} \in (50, 200, 500, 1000)$
 
 Outputs visualized in the next section. 
 
@@ -150,13 +158,13 @@ Outputs visualized in the next section.
 
 ### 3. Marching Cube
 
-As is stated in the last section, outputs of the combination (added $k \in (0, 1, 2)$) are listed in directories `./outputs-guassian_fn`, `./outputs-wendland_fn`, `./outputs-singular_fn`
+As is stated in the last section, outputs of all the combination (adding $k \in (0, 1, 2)$) are listed in directories `./outputs-guassian_fn`, `./outputs-wendland_fn`, `./outputs-singular_fn`
 
-The selection of $\theta$ function seems to have limited impact on the output, so we take $\theta_{Gaussian}$ as an example. 
+Compared with $k, h, N_{neighbors}$, the selection of $\theta$ function seems to have smaller impact on the output, so we take $\theta_{Gaussian}$ as an example. 
 
 
 
-Here are selected results: 
+Here are some selected results: 
 
 | k    | h    | n_neighbors | result                                                       |
 | ---- | ---- | :---------- | ------------------------------------------------------------ |
@@ -167,11 +175,11 @@ Here are selected results:
 
 
 
-Overall, results of $h = 0.001$ are unacceptable. The best n_neighbors is 200 or 500, otherwise the surface would be too smooth or too sharp. 
+Overall, results of $h = 0.001$ are unacceptable. The best $N_{neighbors}$ is 200 or 500, otherwise the surface would be too smooth or too sharp. 
 
 
 
-Although $k = 1$ is much smoother, it will eliminate high-frequency details, like dents in the eyes and neck. And the problem of surface sharpness could be solved by normal interpolation in rendering pipelines. So $k = 0$ is generally better than $k = 1$. 
+Although $k = 1$ is much smoother, it will eliminate high-frequency details, like dents in the eyes and neck. And the problem of surface sharpness could be easily solved by normal interpolation in rendering pipelines. So $k = 0$ is generally better than $k = 1$. 
 
 
 

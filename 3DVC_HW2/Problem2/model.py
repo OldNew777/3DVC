@@ -6,6 +6,10 @@ class Img2PcdModel(nn.Module):
     """
     A neural network of single image to 3D.
     """
+    
+    @classmethod
+    def activation_func(cls):
+        return nn.LeakyReLU(2e-1)
 
     def __init__(self, device):
         super(Img2PcdModel, self).__init__()
@@ -15,13 +19,13 @@ class Img2PcdModel(nn.Module):
         # CNN to get feature vector
         self.encoder = nn.Sequential(
             nn.Conv2d(4, 64, 4, 2, 1),  # (B, 64, 128, 128)
-            nn.Tanh(),
+            self.activation_func(),
             nn.MaxPool2d(2, 2),  # (B, 64, 64, 64)
             nn.Conv2d(64, 128, 4, 2, 1),  # (B, 128, 32, 32)
-            nn.Tanh(),
+            self.activation_func(),
             nn.MaxPool2d(2, 2),  # (B, 128, 16, 16)
             nn.Conv2d(128, 256, 4, 2, 1),  # (B, 256, 8, 8)
-            nn.Tanh(),
+            self.activation_func(),
             nn.MaxPool2d(2, 2),  # (B, 256, 4, 4)
         )
 
