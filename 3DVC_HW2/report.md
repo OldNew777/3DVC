@@ -116,7 +116,14 @@ to make the loss better scaled and robust to different $S_1, S_2$ size. (Althoug
 
 
 
-Here are the visualized results: 
+Eval loss calculated every 50 epochs. Here are the visualized results: 
+
+|                | Training Loss | Eval Loss |
+| -------------- | ------------- | --------- |
+| clean, CD Loss |               |           |
+| noisy, CD Loss |               |           |
+| clean, HD Loss |               |           |
+| noisy, HD Loss |               |           |
 
 
 
