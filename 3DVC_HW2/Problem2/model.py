@@ -9,7 +9,7 @@ class Img2PcdModel(nn.Module):
     
     @classmethod
     def activation_func(cls):
-        return nn.LeakyReLU(2e-1)
+        return nn.LeakyReLU()
 
     def __init__(self, device):
         super(Img2PcdModel, self).__init__()

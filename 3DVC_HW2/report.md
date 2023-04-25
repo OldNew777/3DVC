@@ -4,6 +4,10 @@
 
 
 
+PS: 运行时注意，代码使用 pytorch 2.0 新 feature `set_default_device`
+
+
+
 ## 1. Volume Rendering
 
 Rendering output files in `Problem1/images`
@@ -108,11 +112,17 @@ Different with that in the slides, I use Chamfer Distance as below
 $$
 CD(S_1, S_2) = \frac{1}{|S_1|} \sum_{x \in S_1} { \min_{y \in S_2} { ||x - y||^2_2 } } + \frac{1}{|S_2|} \sum_{y \in S_2} { \min_{x \in S_1} { ||y - x||^2_2 } }
 $$
-to make the loss better scaled. 
+to make the loss better scaled and robust to different $S_1, S_2$ size. (Although the network predicts 1024 points, same as those in test/training set) 
 
 
 
-From my point of view, HD loss is less used in practice because it fully consists of $\max/\min$ function. As a result, let's say we are optimizing point clouds $S$ to $S_{target}$ directly with HD loss. when the loss backward, very few parameters of the predicted point clouds ordinates will have grad, which may largely slow down the optimizing speed.  
+Here are the visualized results: 
+
+
+
+
+
+From my point of view, HD loss is less used in practice because it fully consists of $\max/\min$ function. As a result, let's say we are optimizing point clouds $S$ to $S_{target}$ directly with HD loss, when the loss backward, very few parameters of the predicted point clouds ordinates will have grad, which may largely slow down the optimizing speed.  
 
 
 
@@ -130,6 +140,20 @@ The outer green points represent constraints (b), and the inner red points repre
 
 
 ### 2. MLS interpolation
+
+$$
+\begin{aligned}
+
+a_x
+&= \arg \min_a \sum_{m=0}^{N-1} \theta(||x - c_m||) (b(c_m)^T a - d_m)^2	\\
+&= \arg \min_a \sum_{m=0}^{N-1} (b(c_m)^T a \sqrt{\theta(||x - c_m||)} - d_m \sqrt{\theta(||x - c_m||)})^2	\\
+
+\end{aligned}
+$$
+
+So we can transform $a_x$ to LS problem. 
+
+
 
 For each dimension: 
 
@@ -149,9 +173,7 @@ $$
 
 \end{aligned}
 $$
-$h \in (0.1, 0.01, 0.001)$
-
-$N_{neighbors} \in (50, 200, 500, 1000)$
+and $h \in (0.1, 0.01, 0.001)$, $N_{neighbors} \in (50, 200, 500, 1000)$
 
 Outputs visualized in the next section. 
 
@@ -165,7 +187,7 @@ Compared with $k, h, N_{neighbors}$, the selection of $\theta$ function seems to
 
 
 
-Here are some selected results: 
+Here are some selected results visualized in MeshLab: 
 
 | k    | h    | n_neighbors | result                                                       |
 | ---- | ---- | :---------- | ------------------------------------------------------------ |

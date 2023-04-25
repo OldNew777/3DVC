@@ -11,10 +11,15 @@ import trimesh
 from tqdm import tqdm
 import cv2
 
-
 from dataset import CubeDataset
 from model import Img2PcdModel
 from loss import *
+
+
+def delete_and_make_dir(dir_path):
+    if os.path.exists(dir_path):
+        shutil.rmtree(dir_path)
+    os.makedirs(dir_path)
 
 
 def get_device():
@@ -64,14 +69,14 @@ class Config:
         self.generator = torch.Generator(device=self.device)
 
         # hyper-parameters
-        self.loss_fn = CDLoss()
+        self.loss_fn = HDLoss()
         self.batch_size = 8
         self.epoch = 1000
         self.learning_rate = 1e-4
         self.save_interval = 50
 
         # data path
-        self.dataset = 'clean'
+        self.dataset = 'noisy'
         self.cube_data_path = f'cube_dataset/{self.dataset}'
         activation_func = Img2PcdModel.activation_func()
         activation_func_name = activation_func.__class__.__name__
@@ -82,9 +87,7 @@ class Config:
         self.output_dir += f'-step-{self.loss_fn.__class__.__name__}-{self.dataset}'
         os.makedirs(self.output_dir, exist_ok=True)
         self.eval_dir = os.path.join(self.output_dir, 'eval')
-        if os.path.exists(self.eval_dir):
-            shutil.rmtree(self.eval_dir)
-        os.makedirs(self.eval_dir, exist_ok=True)
+        delete_and_make_dir(self.eval_dir)
         self.model_path = os.path.join(self.output_dir, 'model')
         os.makedirs(self.model_path, exist_ok=True)
 
@@ -100,11 +103,10 @@ class Config:
 config = Config()
 
 
-def get_latest_epoch_filename():
+def get_epoch_list():
     model_filename_list = [filename for filename in os.listdir(config.model_path)
                            if filename.endswith('.pth')]
-    model_epoch_idx = -1
-    index = -1
+    model_epoch_idx = []
     for i in range(len(model_filename_list)):
         model_filename = model_filename_list[i]
         if not model_filename.startswith('model-'):
@@ -112,14 +114,19 @@ def get_latest_epoch_filename():
         model_filename = model_filename.rstrip('.pth').lstrip('model-')
         try:
             epoch_idx = int(model_filename)
-            if epoch_idx > model_epoch_idx:
-                model_epoch_idx = epoch_idx
-                index = i
+            model_epoch_idx.append(epoch_idx)
         except:
-            continue
-    if index == -1:
+            pass
+    model_epoch_idx.sort()
+    return model_epoch_idx
+
+
+def get_latest_epoch_filename():
+    model_epoch_idx = get_epoch_list()
+    if len(model_epoch_idx) == 0:
         return None, 0
-    return os.path.join(config.model_path, model_filename_list[index]), model_epoch_idx
+    latest_epoch_idx = max(model_epoch_idx)
+    return os.path.join(config.model_path, f'model-{latest_epoch_idx}.pth'), latest_epoch_idx
 
 
 def save_model(model, filename, loss_epoch_vec):
@@ -130,6 +137,8 @@ def save_model(model, filename, loss_epoch_vec):
 
 
 def load_model(filename):
+    if type(filename) is int:
+        filename = os.path.join(config.model_path, f'model-{filename}.pth')
     state_dict = torch.load(filename)
     model = Img2PcdModel(device=config.device)
     model.load_state_dict(state_dict)
@@ -190,76 +199,78 @@ def train():
     return model
 
 
-def evaluate(model=None):
+def evaluate():
     # Preperation of datasets and dataloaders:
     test_dataset = CubeDataset(config.cube_data_path, config.test_cube_list, config.view_idx_list, device=config.device)
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, generator=config.generator)
 
-    # Network:
-    if model is None:
-        model_filename, _ = get_latest_epoch_filename()
-        if model_filename is not None:
-            print(f'Loading model from file "{model_filename}"', )
-            model, _ = load_model(model_filename)
-        else:
-            print('No model found')
-            return
+    model_epoch_idx_list = get_epoch_list()
+    loss_eval = {}
+    for model_epoch_idx in model_epoch_idx_list:
+        print(f'Loading model-"{model_epoch_idx}".pth', )
+        output_dir = os.path.join(config.eval_dir, f'model-{model_epoch_idx}')
+        delete_and_make_dir(output_dir)
+        model, _ = load_model(model_epoch_idx)
 
-    # Final evaluation process:
-    model.eval()
-    loss_vec = []
-    with torch.no_grad():
-        for batch_idx, (data_img, data_pcd) in enumerate(test_dataloader):
-            # forward
-            pred = model(data_img)
+        # Final evaluation process:
+        model.eval()
+        loss_vec = []
+        with torch.no_grad():
+            loss_sum = torch.tensor(0.0, device=config.device)
+            for batch_idx, (data_img, data_pcd) in enumerate(test_dataloader):
+                # forward
+                pred = model(data_img)
 
-            # compute loss
-            loss = config.loss_fn(pred, data_pcd)
-            loss_vec.append(loss.item())
-            print(f'Batch {batch_idx}: loss = {loss.item()}')
+                # compute loss
+                loss = config.loss_fn(pred, data_pcd)
+                loss_vec.append(loss.item())
 
-            # save the output point cloud
-            # eval output
-            filename = os.path.join(config.eval_dir, f'{batch_idx}-eval.ply')
-            v = pred[0].detach().cpu().numpy()
-            color = np.ones_like(v) * np.array([255, 0, 0])
-            trimesh.Trimesh(vertices=v, vertex_colors=color).export(filename)
-            # ref
-            filename = os.path.join(config.eval_dir, f'{batch_idx}.ply')
-            v = data_pcd[0].detach().cpu().numpy()
-            color = np.ones_like(v) * np.array([0, 255, 0])
-            trimesh.Trimesh(vertices=v, vertex_colors=color).export(filename)
-            # RGB image
-            filename = os.path.join(config.eval_dir, f'{batch_idx}.png')
-            cv2.imwrite(filename, data_img[0].detach().cpu().numpy().transpose(1, 2, 0) * 255)
+                # save the output point cloud
+                # eval output
+                filename = os.path.join(output_dir, f'{batch_idx}-eval.ply')
+                v = pred[0].detach().cpu().numpy()
+                color = np.ones_like(v) * np.array([255, 0, 0])
+                trimesh.Trimesh(vertices=v, vertex_colors=color).export(filename)
+                # ref
+                filename = os.path.join(output_dir, f'{batch_idx}.ply')
+                v = data_pcd[0].detach().cpu().numpy()
+                color = np.ones_like(v) * np.array([0, 255, 0])
+                trimesh.Trimesh(vertices=v, vertex_colors=color).export(filename)
+                # RGB image
+                filename = os.path.join(output_dir, f'{batch_idx}.png')
+                cv2.imwrite(filename, data_img[0].detach().cpu().numpy().transpose(1, 2, 0) * 255)
 
-    loss = np.mean(loss_vec)
-    print(f'Mean loss = {loss}')
+        loss = np.mean(loss_vec)
+        print(f'Mean loss = {loss}')
 
-    min_loss_idx = np.argmin(loss_vec)
-    print(f'Min loss = {min_loss_idx}, {loss_vec[min_loss_idx]}')
+        min_loss_idx = np.argmin(loss_vec)
+        print(f'Min loss = {min_loss_idx}, {loss_vec[min_loss_idx]}')
 
-    max_loss_idx = np.argmax(loss_vec)
-    print(f'Max loss = {max_loss_idx}, {loss_vec[max_loss_idx]}')
+        max_loss_idx = np.argmax(loss_vec)
+        print(f'Max loss = {max_loss_idx}, {loss_vec[max_loss_idx]}')
 
-    json_dict = {
-        'loss_vec': loss_vec,
-        'min_loss': {
-            'index': int(min_loss_idx),
-            'value': float(loss_vec[min_loss_idx])
-        },
-        'max_loss': {
-            'index': int(max_loss_idx),
-            'value': float(loss_vec[max_loss_idx])
-        },
-        'mean_loss': float(loss),
-    }
-    json.dump(json_dict, open(os.path.join(config.output_dir, 'eval_loss.json'), 'w'), indent=4)
+        json_dict = {
+            'loss_vec': loss_vec,
+            'min_loss': {
+                'index': int(min_loss_idx),
+                'value': float(loss_vec[min_loss_idx])
+            },
+            'max_loss': {
+                'index': int(max_loss_idx),
+                'value': float(loss_vec[max_loss_idx])
+            },
+            'mean_loss': float(loss),
+        }
+        json.dump(json_dict, open(os.path.join(output_dir, 'eval_loss.json'), 'w'), indent=4)
+
+        loss_eval[model_epoch_idx] = loss
+
+    json.dump(loss_eval, open(os.path.join(config.output_dir, 'eval_loss.json'), 'w'), indent=4)
 
 
 if __name__ == "__main__":
     if len(sys.argv) == 1 or sys.argv[1] == 'train':
         model = train()
-        evaluate(model)
+        evaluate()
     elif sys.argv[1] == 'eval':
         evaluate()
