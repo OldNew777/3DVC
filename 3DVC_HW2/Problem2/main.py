@@ -76,7 +76,7 @@ class Config:
         self.save_interval = 50
 
         # data path
-        self.dataset = 'noisy'
+        self.dataset = 'clean'
         self.cube_data_path = f'cube_dataset/{self.dataset}'
         activation_func = Img2PcdModel.activation_func()
         activation_func_name = activation_func.__class__.__name__
@@ -207,7 +207,7 @@ def evaluate():
     model_epoch_idx_list = get_epoch_list()
     loss_eval = {}
     for model_epoch_idx in model_epoch_idx_list:
-        print(f'Loading model-"{model_epoch_idx}".pth', )
+        print(f'Loading model-{model_epoch_idx}.pth', )
         output_dir = os.path.join(config.eval_dir, f'model-{model_epoch_idx}')
         delete_and_make_dir(output_dir)
         model, _ = load_model(model_epoch_idx)
