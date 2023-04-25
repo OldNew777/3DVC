@@ -4,7 +4,7 @@
 
 
 
-PS: 运行时注意，代码使用 pytorch 2.0 新 feature `set_default_device`
+P.S. : 运行时注意，代码使用 pytorch 2.0 新 feature `set_default_device`
 
 
 
@@ -116,14 +116,32 @@ to make the loss better scaled and robust to different $S_1, S_2$ size. (Althoug
 
 
 
-Eval loss calculated every 50 epochs. Here are the visualized results: 
+The network structures are as below:
 
-|                | Training Loss | Eval Loss |
-| -------------- | ------------- | --------- |
-| clean, CD Loss |               |           |
-| noisy, CD Loss |               |           |
-| clean, HD Loss |               |           |
-| noisy, HD Loss |               |           |
+![network](Problem2/pictures/network.svg)
+
+The former CNN part can extract features from the RBG image, and the latter MLP part predict point clouds. 
+
+Note that I use LeakyReLU activation function in the CNN part, and Tanh in the MLP part. 
+
+(I tried `two predictor branch version` in the paper, and it leads to unacceptable results with loss not decreasing during the training process. I don't know why. )
+
+
+
+Use 80 cubes for training and 20 for evaluation, with all 16 views. 
+
+
+
+Eval loss calculated every 50 epochs. Here are the visualized results (mean loss of a particular epoch): 
+
+|                | Training Loss | Eval Loss | Eval Loss of Final Model |
+| -------------- | ------------- | --------- | ------------------------ |
+| clean, CD Loss |               |           |                          |
+| noisy, CD Loss |               |           |                          |
+| clean, HD Loss |               |           |                          |
+| noisy, HD Loss |               |           |                          |
+
+
 
 
 
