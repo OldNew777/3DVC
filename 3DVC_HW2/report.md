@@ -14,9 +14,12 @@ Rendering output files in `Problem1/images`
 
 ### 1. Ray sampling
 
-![grid_vis](Problem1/images/grid_vis.png)
-
-![ray_vis](Problem1/images/ray_vis.png)
+<center>
+    <figure>
+        <img src="Problem1/images/grid_vis.png" />
+        <img src="Problem1/images/ray_vis.png" />
+    </figure>
+</center>
 
 
 
@@ -43,9 +46,12 @@ $$
 
 ### 4. Rendering
 
-![render_cube](Problem1/images/render_cube.gif)
-
-<img src="Problem1/images/render_nerf.gif" alt="render_nerf" style="zoom: 200%;" />
+<center>
+    <figure>
+        <img src="Problem1/images/render_cube.gif" />
+        <img src="Problem1/images/render_nerf.gif" width="23%" />
+    </figure>
+</center>
 
 
 
@@ -94,21 +100,23 @@ $$
 
 h(A, B) + h(B, C)
 &= \max { \{ d(A, B), d(B, A) \} } + \max { \{ d(B, C), d(C, B) \} }	\\
-& \ge d(B, A) + d(B, C)	\\
-&= \max_{b_i \in B} { [\min_{a_j \in A} { [d(b_i, a_j)] }] } + \max_{b_i \in B} { [\min_{c_j \in C} { [d(b_i, c_j)] }] }	\\
-&= \max_{b_i \in B} { \{ \min_{a_j \in A} { [d(b_i, a_j)] } + \min_{c_j \in C} { [d(b_i, c_j)] } \} }	\\
-& \ge \max_{b_i \in B} { [ \min_{a_j \in A, c_j \in C} { [ d(b_i, a_j) + d(b_i, c_j)] }] }	\\
-& \ge \min_{a_j \in A, c_j \in C} { [ d(a_i, c_j)] }	\\
-& \ge h(A, C)
+& \ge \max { \{ d(A, B) + d(B, C), d(C, B) + d(B, A) \} } \\
+& \ge d(A, B) + d(B, C)	\\
+&= \max_{a \in B} { [\min_{b \in B} { [d(a, b)] }] } + \max_{b \in B} { [\min_{c \in C} { [d(b, c)] }] }	\\
+& \ge \max_{a \in B} { [\min_{b \in B} { [d(a, b)] }] } + \min_{b \in B} { [\min_{c \in C} { [d(b, c)] }] }	\\
+&= \max_{a \in B} { [\min_{b \in B} { [ \min_{c \in C} { [d(a, b) + d(b, c)] }] }] }	\\
+& \ge \max_{a \in B} { [\min_{b \in B} { [ \min_{c \in C} { [d(a, c)] }] }] }	\\
+&= \max_{a \in B} { [ \min_{c \in C} { [d(a, c)] }] }	\\
+&= h(A, C)	\\
+
+\text{Namely} &\space h(A, B) + h(B, C) \ge h(A, C)
 
 \end{aligned}
 $$
 
 
 
-### 2. Network design
-
-Different with that in the slides, I use Chamfer Distance as below
+Different with that in the slides, I implement Chamfer Distance (CD) as below
 $$
 CD(S_1, S_2) = \frac{1}{|S_1|} \sum_{x \in S_1} { \min_{y \in S_2} { ||x - y||^2_2 } } + \frac{1}{|S_2|} \sum_{y \in S_2} { \min_{x \in S_1} { ||y - x||^2_2 } }
 $$
@@ -116,13 +124,15 @@ to make the loss better scaled and robust to different $S_1, S_2$ size. (Althoug
 
 
 
+### 2. Network design
+
 The network structures are as below:
 
 ![network](Problem2/pictures/network.svg)
 
 The former CNN part can extract features from the RBG image, and the latter MLP part predict point clouds. 
 
-Note that I use LeakyReLU activation function in the CNN part, and Tanh in the MLP part. 
+Note that I use `LeakyReLU` activation function in the CNN part, and `Tanh` in the MLP part. 
 
 (I tried `two predictor branch version` in the paper, and it leads to unacceptable results with loss not decreasing during the training process. I don't know why. )
 
@@ -134,20 +144,31 @@ Use 80 cubes for training and 20 for evaluation, with all 16 views.
 
 Eval loss calculated every 50 epochs. Here are the visualized results (mean loss of a particular epoch): 
 
-|                | Training Loss | Eval Loss | Eval Loss of Final Model |
-| -------------- | ------------- | --------- | ------------------------ |
-| clean, CD Loss |               |           |                          |
-| noisy, CD Loss |               |           |                          |
-| clean, HD Loss |               |           |                          |
-| noisy, HD Loss |               |           |                          |
+(Mean/Min/Max represent those of the final model's eval loss)
+
+|                | Training Loss                                                | Eval Loss                                                    | Mean  | Min    | Max   |
+| -------------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ----- | ------ | ----- |
+| clean, CD Loss | ![training_loss](Problem2/outputs/outputs-LeakyReLU-step-CDLoss-clean/training_loss.png) | ![eval_loss](Problem2/outputs/outputs-LeakyReLU-step-CDLoss-clean/eval_loss.png) | 0.108 | 0.0046 | 0.839 |
+| noisy, CD Loss | ![training_loss](Problem2/outputs/outputs-LeakyReLU-step-CDLoss-noisy/training_loss.png) | ![eval_loss](Problem2/outputs/outputs-LeakyReLU-step-CDLoss-noisy/eval_loss.png) | 0.085 | 0.0111 | 0.675 |
+| clean, HD Loss | ![training_loss](Problem2/outputs/outputs-LeakyReLU-step-HDLoss-clean/training_loss.png) | ![eval_loss](Problem2/outputs/outputs-LeakyReLU-step-HDLoss-clean/eval_loss.png) | 0.433 | 0.143  | 1.282 |
+| noisy, HD Loss | ![training_loss](Problem2/outputs/outputs-LeakyReLU-step-HDLoss-noisy/training_loss.png) | ![eval_loss](Problem2/outputs/outputs-LeakyReLU-step-HDLoss-noisy/eval_loss.png) | 0.535 | 1.052  | 2.151 |
 
 
 
+|                | Best Result                                           | Worst Result                                            |
+| -------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| clean, CD Loss | ![CD-clean-best](Problem2/pictures/CD-clean-best.png) | ![CD-clean-worst](Problem2/pictures/CD-clean-worst.png) |
+| noisy, CD Loss | ![CD-noisy-best](Problem2/pictures/CD-noisy-best.png) | ![CD-noisy-worst](Problem2/pictures/CD-noisy-worst.png) |
+| clean, HD Loss | ![HD-clean-best](Problem2/pictures/HD-clean-best.png) | ![HD-clean-worst](Problem2/pictures/HD-clean-worst.png) |
+| noisy, HD Loss | ![HD-noisy-best](Problem2/pictures/HD-noisy-best.png) | ![HD-noisy-worst](Problem2/pictures/HD-noisy-worst.png) |
 
 
 
+Noisy dataset are better than clean dataset, and as the network trains, eval loss increases generally. I think they are all because of overfitting. Small dataset size and clean data may result in overfitting, and the lack of regularizer adds to this problem. 
 
-From my point of view, HD loss is less used in practice because it fully consists of $\max/\min$ function. As a result, let's say we are optimizing point clouds $S$ to $S_{target}$ directly with HD loss, when the loss backward, very few parameters of the predicted point clouds ordinates will have grad, which may largely slow down the optimizing speed.  
+
+
+From my point of view, HD loss is less used in practice because it fully consists of $\max/\min$ function. As a result, let's say we are optimizing point clouds $S$ to $S_{target}$ directly with HD loss, when the loss backward, very few parameters of the predicted point clouds ordinates will have grad, which may largely slow down the optimizing speed.  With limited training time, we won't get a good result. 
 
 
 
@@ -180,11 +201,13 @@ So we can transform $a_x$ to LS problem.
 
 
 
-For each dimension: 
+For each dimension, I set 
 
 ​	Voxel number =  $(38, 37, 30)$
 
 ​	Voxel size = $(0.00461889, 0.00466862, 0.0046734)$
+
+to capture the AABB. 
 
 
 

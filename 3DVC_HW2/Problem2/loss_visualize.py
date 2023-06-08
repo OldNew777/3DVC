@@ -34,8 +34,8 @@ def loss_visualize(filename):
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     # plt.ylim(0, 0.11)
-    # plt.ylim(0, 2)
-    plt.xticks(np.arange(0, index[-1] + 1, index[-1] // 10))
+    plt.ylim(0, 2)
+    # plt.xticks(np.arange(0, index[-1] + 1, index[-1] // 10))
 
     plt.savefig(filename.replace('.json', '.png'))
     plt.show()
@@ -49,6 +49,6 @@ def scatter_picture(filename):
 
 
 if __name__ == '__main__':
-    dir = r'D:\OldNew\3DVC\image2pcd\outputs-LeakyReLU-step-CDLoss-clean'
-    # loss_visualize(os.path.join(dir, 'training_loss.json'))
-    loss_visualize(os.path.join(dir, 'eval_loss.json'))
+    dir = r'D:\OldNew\3DVC\image2pcd\outputs-LeakyReLU-step-HDLoss-clean'
+    loss_visualize(os.path.join(dir, 'training_loss.json'))
+    # loss_visualize(os.path.join(dir, 'eval_loss.json'))
