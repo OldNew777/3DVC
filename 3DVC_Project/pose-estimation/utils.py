@@ -3,6 +3,7 @@ import time
 
 import numpy as np
 import cv2
+from sklearn import metrics
 from transforms3d.quaternions import quat2mat
 
 from mylogger import logger
@@ -24,6 +25,21 @@ def normalize(v: np.ndarray) -> np.ndarray:
     """Normalize a vector.
     """
     return v / np.linalg.norm(v)
+
+
+def CDLoss_np(x: np.ndarray, y: np.ndarray) -> float:
+    """
+    CD Loss.
+    """
+    # Chamfer Distance Loss
+    d2 = metrics.euclidean_distances(x, y)
+    print(d2.shape)
+    print(d2)
+    dimension = len(d2.shape)
+    d_x = np.min(d2, axis=dimension - 1)
+    d_y = np.min(d2, axis=dimension - 2)
+    return np.sum(d_x, axis=dimension - 2) / d2.shape[-2] + \
+           np.sum(d_y, axis=dimension - 2) / d2.shape[-1]
 
 
 VERTEX_COLORS = [

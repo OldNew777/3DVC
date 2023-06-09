@@ -1,5 +1,4 @@
 import torch
-import torch
 
 
 class CDLoss(torch.nn.Module):
