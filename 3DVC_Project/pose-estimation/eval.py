@@ -1,12 +1,5 @@
-import os
-import shutil
-import tqdm
-
 import numpy as np
-import torch
 from transforms3d.euler import euler2mat
-
-from mylogger import logger
 
 
 def eval_rdiff_with_sym_axis(pred_rotation, gt_rotation, sym_axis):
@@ -86,17 +79,17 @@ def eval(pred_pose, gt_pose, geometric_symmetry):
 
 def main():
     # define geometric symmetry
-    geometric_symmetry = "zinf|x2"
+    geometric_symmetry = "zinf|x4"
 
     # randomize a pose prediction
-    pred_pose = np.zeros((4, 4))
-    pred_pose[:3, :3] = euler2mat(
+    pred_M = np.zeros((4, 4))
+    pred_M[:3, :3] = euler2mat(
         np.random.uniform(-np.pi, np.pi),
         np.random.uniform(-np.pi, np.pi),
         np.random.uniform(-np.pi, np.pi),
     )
-    pred_pose[:3, 3] = np.random.uniform(-0.01, 0.01, 3)
-    pred_pose[3, 3] = 1
+    pred_M[:3, 3] = np.random.uniform(-0.01, 0.01, 3)
+    pred_M[3, 3] = 1
 
     # randomize a ground truth pose
     gt_pose = np.zeros((4, 4))
@@ -109,7 +102,7 @@ def main():
     gt_pose[3, 3] = 1
 
     # evaluate rotation error and translation error
-    r_diff, t_diff = eval(pred_pose @ gt_pose, gt_pose, geometric_symmetry)
+    r_diff, t_diff = eval(pred_M @ gt_pose, gt_pose, geometric_symmetry)
     print("rotation error = {} (degree)".format(r_diff))
     print("translation error = {} (cm)".format(t_diff))
 

@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 from tqdm import tqdm
 from sklearn import neighbors
@@ -24,53 +26,50 @@ def icp(src: np.ndarray,
     kdtree = neighbors.KDTree(gt)
 
     # Run ICP
-    def icp_solve(R_init: np.ndarray, t_init: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def icp_solve(R_init: np.ndarray, t_init: np.ndarray) -> Tuple[np.ndarray, np.ndarray, float]:
         logger.info('')
         logger.info(f'R_init = \n{R_init}')
         logger.info(f't_init = \n{t_init}')
         R_ans, t_ans = R_init, t_init
-        with tqdm(range(max_iterations), desc="ICP", ncols=80) as pbar:
-            for i in pbar:
-                # Find nearest neighbors between the current source and target points parallel
-                x = src @ R_ans.T + t_ans
-                nearest_indices = kdtree.query(x)[1].reshape(-1)
-                y = gt[nearest_indices]
-                x_average = np.mean(x, axis=0)
-                y_average = np.mean(y, axis=0)
+        loss = math.inf
+        for i in range(max_iterations):
+            # Find nearest neighbors between the current source and target points parallel
+            x = src @ R_ans.T + t_ans
+            nearest_indices = kdtree.query(x)[1].reshape(-1)
+            y = gt[nearest_indices]
+            x_average = np.mean(x, axis=0)
+            y_average = np.mean(y, axis=0)
 
-                # Compute loss
-                # TODO: CD Loss?
-                loss = np.linalg.norm(x - y, axis=1, ord=2).mean()
-                pbar.set_postfix({"loss": f'{loss:.6f}'})
-                pbar.update()
+            # Compute loss
+            # TODO: CD Loss?
+            loss = np.linalg.norm(x - y, axis=1, ord=2).mean()
 
-                # Compute transformation matrix that minimizes the average distance between the source and target points
-                H = (y - y_average).T @ (x - x_average)
-                U, Sigma, VT = np.linalg.svd(H)
+            # Compute transformation matrix that minimizes the average distance between the source and target points
+            H = (y - y_average).T @ (x - x_average)
+            U, Sigma, VT = np.linalg.svd(H)
+            R = U @ VT
+            if np.linalg.det(R) < 0:
+                VT[-1, :] *= -1
                 R = U @ VT
-                if np.linalg.det(R) < 0:
-                    VT[-1, :] *= -1
-                    R = U @ VT
-                t = y_average - x_average @ R.T
+            t = y_average - x_average @ R.T
 
-                # Update transformation
-                R_ans = R @ R_ans
-                t_ans = R @ t_ans + t
+            # Update transformation
+            R_ans = R @ R_ans
+            t_ans = R @ t_ans + t
 
-                # Check if converged (transformation is not updated)
-                if np.allclose(R, np.eye(3), atol=tolerance) and np.allclose(t, np.zeros(3), atol=tolerance):
-                    # probably fall into local minimum
-                    logger.info(f"Converged at iteration {i}")
-                    break
+            # Check if converged (transformation is not updated)
+            if np.allclose(R, np.eye(3), atol=tolerance) and np.allclose(t, np.zeros(3), atol=tolerance):
+                # probably fall into local minimum
+                break
 
-        return R_ans, t_ans
+        return R_ans, t_ans, loss
 
     # Initialize transformation
     def icp_init(src: np.ndarray, gt: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         # aabb_src = np.array([np.min(src, axis=0), np.max(src, axis=0)])
         # aabb_gt = np.array([np.min(gt, axis=0), np.max(gt, axis=0)])
         R_init = np.eye(3)
-        t_init = np.mean(gt, axis=0) - np.mean(src, axis=0)
+        t_init = np.mean(gt, axis=0) - np.mean(src @ R_init.T, axis=0)
         return R_init, t_init
     R_init, t_init = icp_init(src, gt)
 
@@ -78,18 +77,19 @@ def icp(src: np.ndarray,
 
 
 def test_icp():
-    max_iterations = 1000
+    max_iterations = 2000
     n = 10000
     x = np.random.rand(n, 3)
     R = euler2mat(11, 62, 13)
     t = np.array([0, 0, 0])
     y = x @ R.T + t
 
-    R_ans, t_ans = icp(x, y, max_iterations)
+    R_ans, t_ans, loss = icp(x, y, max_iterations)
     logger.debug(f"R    : \n{R}")
     logger.debug(f"R_ans: \n{R_ans}")
     logger.debug(f"t    : {t}")
     logger.debug(f"t_ans: {t_ans}")
+    logger.debug(f"loss : {loss}")
 
     y_ans = x @ R_ans.T + t_ans
     logger.debug(f"y : \n{y}")
