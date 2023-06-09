@@ -26,8 +26,7 @@ def icp(src: np.ndarray,
         # aabb_src = np.array([np.min(src, axis=0), np.max(src, axis=0)])
         # aabb_tgt = np.array([np.min(tgt, axis=0), np.max(tgt, axis=0)])
         R_ans = np.eye(3)
-        # t_ans = np.average(tgt, axis=0) - np.average(src, axis=0)
-        t_ans = np.zeros(3)
+        t_ans = np.mean(tgt, axis=0) - np.mean(src, axis=0)
         return R_ans, t_ans
     R_ans, t_ans = icp_init()
     logger.debug(f'R_init = \n{R_ans}')
@@ -41,14 +40,13 @@ def icp(src: np.ndarray,
         x = src @ R_ans.T + t_ans
         nearest_indices = kdtree.query(x)[1].reshape(-1)
         y = tgt[nearest_indices]
-        x_average = np.average(x, axis=0)
-        y_average = np.average(y, axis=0)
+        x_average = np.mean(x, axis=0)
+        y_average = np.mean(y, axis=0)
 
         loss = np.linalg.norm(x - y, axis=1, ord=2).mean()
-        print(loss)
 
         # Compute transformation matrix that minimizes the average distance between the source and target points
-        H = y.T @ x
+        H = (y - y_average).T @ (x - x_average)
         U, Sigma, VT = np.linalg.svd(H)
         R = U @ VT
         if np.linalg.det(R) < 0:
@@ -70,13 +68,13 @@ def icp(src: np.ndarray,
 
 
 def test_icp():
-    n = 2
+    n = 3
     x = np.random.rand(n, 3)
     R = euler2mat(11, 62, 13)
     t = np.array([0, 0, 0])
     y = x @ R.T + t
 
-    R_ans, t_ans = icp(x, y, 1)
+    R_ans, t_ans = icp(x, y, 100)
     logger.debug(f"R    : \n{R}")
     logger.debug(f"R_ans: \n{R_ans}")
     logger.debug(f"t    : {t}")
