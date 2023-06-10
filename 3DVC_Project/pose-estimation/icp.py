@@ -47,15 +47,16 @@ def icp_solve(src: np.ndarray, gt: np.ndarray, kdtree: neighbors.KDTree,
     # logger.info('')
     # logger.info(f'R_init = \n{R_init}')
     # logger.info(f't_init = \n{t_init}')
+    n = src.shape[0]
     R, t = R_init, t_init
     x = src
     loss = math.inf
     loss_new = 0.
     x_new = x @ R.T + t
     for i in range(max_iterations):
-        # Visualize
-        if config.visualize and config.visualize_icp_iter:
-            visualize_point_cloud(x_new, gt)
+        # # Visualize
+        # if config.visualize and config.visualize_icp_iter:
+        #     visualize_point_cloud(x_new, gt)
 
         # Find nearest neighbors between the current source and target points parallel
         nearest_indices = kdtree.query(x_new, k=1, return_distance=False).reshape(-1)
@@ -76,7 +77,7 @@ def icp_solve(src: np.ndarray, gt: np.ndarray, kdtree: neighbors.KDTree,
         x_new = src @ R.T + t
 
         # Compute loss
-        loss_new = np.linalg.norm(x_new - y).item()
+        loss_new = np.linalg.norm(x_new - y).item() / n
 
         # Check if converged (transformation is not updated)
         if 0 < loss - loss_new < tolerance or loss_new < tolerance:
@@ -113,6 +114,8 @@ def icp(src: np.ndarray, gt: np.ndarray, obj_model: ObjModel,
                                    max_iterations=max_iterations, tolerance=tolerance)
             if loss < loss_min:
                 R_ans, t_ans, loss_min = R, t, loss
+            if loss_min < config.loss_tolerance_multi_init:
+                break
     else:
         for R_init in icp_init(obj_model):
             t_init = np.mean(src, axis=0) - np.mean(gt @ R_init.T, axis=0)
@@ -125,6 +128,8 @@ def icp(src: np.ndarray, gt: np.ndarray, obj_model: ObjModel,
                 R = R_init_inv @ R
                 t = R_init_inv @ (t - t_init)
                 R_ans, t_ans, loss_min = R, t, loss
+            if loss_min < config.loss_tolerance_multi_init:
+                break
 
     return R_ans, t_ans, loss_min
 

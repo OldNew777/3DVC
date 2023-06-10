@@ -177,12 +177,19 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
     test_dataset = get_datasets('train')
     obj_csv_path = os.path.join(config.testing_data_dir, 'objects_v1.csv')
     obj_model_list = ObjList(obj_csv_path)
+
     output = {}
+    n_all = 0
+    n_correct = 0
+
+    if os.path.exists(config.output_path) and os.path.exists(config.extra_info_path):
+        output = json.load(open(config.output_path, 'r'))
+        extra_info = pickle.load(open(config.extra_info_path, 'rb'))
+        n_all = extra_info['n_all']
+        n_correct = extra_info['n_correct']
 
     if algo_type == 'icp':
-        n_all = 0
-        n_correct = 0
-        with tqdm(range(len(test_dataset)), desc='ICP', ncols=80) as pbar:
+        with tqdm(range(len(output), len(test_dataset)), desc='ICP', ncols=80) as pbar:
             for i in pbar:
                 rgb, depth, label, meta, prefix = test_dataset[i]
                 output[prefix] = {}
@@ -205,34 +212,34 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
 
                     # evaluate whether the prediction is correct
                     r_diff, t_diff = eval(pose_world_pred, pose_world, obj_model.geometric_symmetry)
-                    # logger.info(f'------------------{prefix}------------------')
-                    # logger.info(f'obj_id = {obj_id}, obj_name = {obj_model.name}')
-                    # logger.info(f'loss = {loss:.06f}')
-                    # logger.info(f'pose_world_pred =\n{pose_world_pred}')
-                    # logger.info(f'pose_world =\n{pose_world} degree')
-                    # logger.info(f'geometric_symmetry = {obj_model.geometric_symmetry}')
-                    # logger.info(f"r_diff = {r_diff:.03f} degree, t_diff = {t_diff:.03f} cm")
-                    # exit(0)
+                    # # logger.info(f'------------------{prefix}------------------')
+                    # # logger.info(f'obj_id = {obj_id}, obj_name = {obj_model.name}')
+                    # # logger.info(f'loss = {loss:.06f}')
+                    # # logger.info(f'pose_world_pred =\n{pose_world_pred}')
+                    # # logger.info(f'pose_world =\n{pose_world} degree')
+                    # # logger.info(f'geometric_symmetry = {obj_model.geometric_symmetry}')
+                    # # logger.info(f"r_diff = {r_diff:.03f} degree, t_diff = {t_diff:.03f} cm")
+                    # # exit(0)
+
                     match = judge(r_diff, t_diff)
                     n_all += 1
                     n_correct += match
                     correct_rate = n_correct / n_all
                     pbar.set_postfix_str(f'correct ({n_correct}/{n_all}, {correct_rate:.06f})')
 
-                    # visualize
-                    if config.visualize:
-                        R_ref = pose_world[:3, :3]
-                        t_ref = pose_world[:3, 3]
-                        visualize_point_cloud(world_coord, model_coord @ R.T + t, model_coord @ R_ref.T + t_ref)
+                    # # visualize
+                    # if config.visualize:
+                    #     R_ref = pose_world[:3, :3]
+                    #     t_ref = pose_world[:3, 3]
+                    #     visualize_point_cloud(world_coord, model_coord @ R.T + t, model_coord @ R_ref.T + t_ref)
 
                 output[prefix]['poses_world'] = pose_world_predict_list
 
                 if i % config.test_output_interval == 0 and i > 0:
-                    with open(os.path.join(config.output_dir, 'output.json'), 'w') as f:
-                        json.dump(output, f, indent=4)
+                    json.dump(output, open(config.output_path, 'w'))
+                    pickle.dump({'n_all': n_all, 'n_correct': n_correct}, open(config.extra_info_path, 'wb'))
 
-        with open(os.path.join(config.output_dir, 'output.json'), 'w') as f:
-            json.dump(output, f, indent=4)
+        json.dump(output, open(config.output_path, 'w'))
 
     elif algo_type == 'nn':
         if nn_info is None:
