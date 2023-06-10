@@ -13,21 +13,37 @@ from config import *
 
 
 # Initialize transformation
-def icp_init(src: np.ndarray, gt: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray]]:
-    for i in range(config.n_seg):
-        for j in range(config.n_seg):
-            for k in range(config.n_seg):
-                R_init = euler2mat(i * 2 * np.pi / config.n_seg,
-                                   j * 2 * np.pi / config.n_seg,
-                                   k * 2 * np.pi / config.n_seg)
-                t_init = np.mean(gt, axis=0) - np.mean(src @ R_init.T, axis=0)
-                yield R_init, t_init
+def icp_init(obj_model: ObjModel):
+    seg_max = np.ones(3, dtype=int) * config.n_seg
+    mask_inf = obj_model.geometric_symmetry_split == np.inf
+    mask_2 = obj_model.geometric_symmetry_split == 2
+    mask_2toinf = (obj_model.geometric_symmetry_split < np.inf) & (obj_model.geometric_symmetry_split > 2)
+    seg_max[mask_inf] = 1
+    seg_max[mask_2] = min(2, config.n_seg)
+    seg_max[mask_2toinf] = 1
+
+    degree_max = np.ones(3) * 2 * np.pi / obj_model.geometric_symmetry_split
+    degree_max[mask_inf] = 2 * np.pi
+
+    # logger.debug(obj_model.geometric_symmetry)
+    # logger.debug(obj_model.geometric_symmetry_split)
+    # logger.debug(mask_inf)
+    # logger.debug(mask_2)
+    # logger.debug(mask_2toinf)
+    # logger.debug(*seg_max)
+    # exit(0)
+
+    for i, j, k in np.ndindex(*seg_max):
+        R_init = euler2mat(i * 2 * degree_max[i] / seg_max[i],
+                           j * 2 * degree_max[j] / seg_max[j],
+                           k * 2 * degree_max[k] / seg_max[k])
+        yield R_init
 
 
 # Run ICP
 def icp_solve(src: np.ndarray, gt: np.ndarray, kdtree: neighbors.KDTree,
-              R_init: np.ndarray, t_init: np.ndarray,
-              max_iterations: int, tolerance: float) -> Tuple[np.ndarray, np.ndarray, float]:
+              R_init: np.ndarray = np.eye(3), t_init: np.ndarray = np.zeros(3),
+              max_iterations: int = 10000, tolerance: float = 1e-6) -> Tuple[np.ndarray, np.ndarray, float]:
     # logger.info('')
     # logger.info(f'R_init = \n{R_init}')
     # logger.info(f't_init = \n{t_init}')
@@ -35,7 +51,7 @@ def icp_solve(src: np.ndarray, gt: np.ndarray, kdtree: neighbors.KDTree,
     x = src
     loss = math.inf
     loss_new = 0.
-    x_new = src @ R.T + t
+    x_new = x @ R.T + t
     for i in range(max_iterations):
         # Visualize
         if config.visualize and config.visualize_icp_iter:
@@ -72,8 +88,7 @@ def icp_solve(src: np.ndarray, gt: np.ndarray, kdtree: neighbors.KDTree,
     return R, t, loss_new
 
 
-def icp(src: np.ndarray,
-        gt: np.ndarray,
+def icp(src: np.ndarray, gt: np.ndarray, obj_model: ObjModel,
         max_iterations: int = 10000, tolerance: float = 1e-6) -> Tuple[np.ndarray, np.ndarray, float]:
     """
     Iterative Closest Point (ICP) algorithm.
@@ -89,13 +104,27 @@ def icp(src: np.ndarray,
     #     R_inv = np.linalg.inv(R)
     #     return R_inv, -R_inv @ t, loss
 
-    kdtree = neighbors.KDTree(gt)
-
     loss_min = math.inf
-    for R_init, t_init in icp_init(src, gt):
-        R, t, loss = icp_solve(src, gt, kdtree, R_init, t_init, max_iterations, tolerance)
-        if loss < loss_min:
-            R_ans, t_ans, loss_min = R, t, loss
+    if obj_model.geometric_symmetry == 'no':
+        kdtree = neighbors.KDTree(gt)
+        for R_init in icp_init(obj_model):
+            t_init = np.mean(gt, axis=0) - np.mean(src @ R_init.T, axis=0)
+            R, t, loss = icp_solve(src=src, gt=gt, kdtree=kdtree, R_init=R_init, t_init=t_init,
+                                   max_iterations=max_iterations, tolerance=tolerance)
+            if loss < loss_min:
+                R_ans, t_ans, loss_min = R, t, loss
+    else:
+        for R_init in icp_init(obj_model):
+            t_init = np.mean(src, axis=0) - np.mean(gt @ R_init.T, axis=0)
+            gt_init = gt @ R_init.T + t_init
+            kdtree = neighbors.KDTree(gt_init)
+            R_init_inv = np.linalg.inv(R_init)
+            R, t, loss = icp_solve(src=src, gt=gt_init, kdtree=kdtree,
+                                   max_iterations=max_iterations, tolerance=tolerance)
+            if loss < loss_min:
+                R = R_init_inv @ R
+                t = R_init_inv @ (t - t_init)
+                R_ans, t_ans, loss_min = R, t, loss
 
     return R_ans, t_ans, loss_min
 

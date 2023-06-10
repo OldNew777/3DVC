@@ -190,26 +190,28 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
 
                 for obj_index, (world_coord, model_coord, pose_world, box_sizes) in \
                         enumerate(load_meta(obj_model_list, rgb, depth, label, meta)):
+                    obj_id = meta['object_ids'][obj_index]
+                    obj_model = obj_model_list[obj_id]
+
                     # try to match part of the model to the whole
-                    R, t, loss = icp(world_coord, model_coord, config.icp_max_iter)
+                    R, t, loss = icp(world_coord, model_coord, obj_model, config.icp_max_iter)
                     R_inv = np.linalg.inv(R)
                     R, t = R_inv, -R_inv @ t
 
                     pose_world_pred = np.eye(4)
                     pose_world_pred[:3, :3] = R
                     pose_world_pred[:3, 3] = t
-                    obj_id = meta['object_ids'][obj_index]
-                    pose_world_predict_list[obj_id] = list(pose_world_pred)
+                    pose_world_predict_list[obj_id] = pose_world_pred.tolist()
 
                     # evaluate whether the prediction is correct
-                    r_diff, t_diff = eval(pose_world_pred, pose_world, obj_model_list[obj_id].geometric_symmetry)
-                    logger.info(f'------------------{prefix}------------------')
-                    logger.info(f'obj_id = {obj_id}, obj_name = {obj_model_list[obj_id].name}')
-                    logger.info(f'loss = {loss:.06f}')
-                    logger.info(f'pose_world_pred =\n{pose_world_pred}')
-                    logger.info(f'pose_world =\n{pose_world} degree')
-                    logger.info(f'geometric_symmetry = {obj_model_list[obj_id].geometric_symmetry}')
-                    logger.info(f"r_diff = {r_diff:.03f} degree, t_diff = {t_diff:.03f} cm")
+                    r_diff, t_diff = eval(pose_world_pred, pose_world, obj_model.geometric_symmetry)
+                    # logger.info(f'------------------{prefix}------------------')
+                    # logger.info(f'obj_id = {obj_id}, obj_name = {obj_model.name}')
+                    # logger.info(f'loss = {loss:.06f}')
+                    # logger.info(f'pose_world_pred =\n{pose_world_pred}')
+                    # logger.info(f'pose_world =\n{pose_world} degree')
+                    # logger.info(f'geometric_symmetry = {obj_model.geometric_symmetry}')
+                    # logger.info(f"r_diff = {r_diff:.03f} degree, t_diff = {t_diff:.03f} cm")
                     # exit(0)
                     match = judge(r_diff, t_diff)
                     n_all += 1

@@ -23,7 +23,7 @@ class Config:
         self.n_sample_points = 10000
         self.n_obj = 79
         self.n_seg = 3
-        self.visualize = True
+        self.visualize = False
         self.visualize_icp_iter = False
 
         self.icp_max_iter = 500
