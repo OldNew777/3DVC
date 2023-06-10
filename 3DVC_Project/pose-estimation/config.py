@@ -4,11 +4,14 @@ import torch
 
 class Config:
     def __init__(self):
+        self.algo_type = 'icp'
+
         self.data_dir = os.path.realpath('D:/OldNew/3DVC/pose-estimation')
         self.training_data_dir = os.path.join(self.data_dir, 'training_data')
         self.testing_data_dir = os.path.join(self.data_dir, 'testing_data')
         self.obj_model_dir = os.path.join(self.data_dir, 'model')
         self.nn_model_dir = os.path.join(self.data_dir, 'nnModel')
+        self.output_dir = os.path.join(self.data_dir, 'output', self.algo_type)
 
         self.device_ids = [i for i in range(torch.cuda.device_count())]
         self.default_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -20,9 +23,10 @@ class Config:
         self.lr_scheduler_step_size = 1000
         self.lr_scheduler_gamma = 0.9
 
-        self.num_epochs = 400
+        self.num_epochs = 1000
         self.batch_size = 64
         self.checkpoint_interval = 50
+        self.test_interval = 100
 
 
 config = Config()

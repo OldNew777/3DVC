@@ -77,7 +77,7 @@ def eval(pred_pose, gt_pose, geometric_symmetry):
     return r_diff, t_diff
 
 
-def main():
+def test_eval():
     # define geometric symmetry
     geometric_symmetry = "zinf|x4"
 
@@ -108,4 +108,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    test_eval()
