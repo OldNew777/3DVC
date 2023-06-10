@@ -1,3 +1,5 @@
+import math
+
 import trimesh
 import os
 
@@ -45,6 +47,7 @@ class ObjModel:
         self.width = csv_row['width']
         self.length = csv_row['length']
         self.height = csv_row['height']
+        self.oblique_axis = np.linalg.norm(self.aabb_max - self.aabb_min).item()
 
         def load_symmetry(symmetry_str: str) -> np.ndarray:
             symmetry = np.ones(3)

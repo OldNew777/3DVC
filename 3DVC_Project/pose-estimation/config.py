@@ -20,16 +20,15 @@ class Config:
         self.device_ids = [i for i in range(torch.cuda.device_count())]
         self.default_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        self.W = 1280
-        self.H = 720
-        self.n_sample_points = 10000
         self.n_obj = 79
-        self.n_seg = 3
-        self.visualize = False
+        self.visualize = True
         self.visualize_icp_iter = False
-        self.loss_tolerance_multi_init = 1e-5
 
+        self.n_sample_points = 10000
+        self.icp_tolerance = 1e-9
         self.icp_max_iter = 500
+        self.loss_tolerance_multi_init = 0.00011
+        self.n_seg = 3
 
         self.lr = 1e-4
         self.lr_scheduler_step_size = 1000

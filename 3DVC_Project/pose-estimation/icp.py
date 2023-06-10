@@ -14,16 +14,16 @@ from config import *
 
 # Initialize transformation
 def icp_init(obj_model: ObjModel):
+    degree_max = np.ones(3) * 2 * np.pi
     seg_max = np.ones(3, dtype=int) * config.n_seg
-    mask_inf = obj_model.geometric_symmetry_split == np.inf
-    mask_2 = obj_model.geometric_symmetry_split == 2
-    mask_2toinf = (obj_model.geometric_symmetry_split < np.inf) & (obj_model.geometric_symmetry_split > 2)
-    seg_max[mask_inf] = 1
-    seg_max[mask_2] = min(2, config.n_seg)
-    seg_max[mask_2toinf] = 1
 
-    degree_max = np.ones(3) * 2 * np.pi / obj_model.geometric_symmetry_split
-    degree_max[mask_inf] = 2 * np.pi
+    mask_inf = obj_model.geometric_symmetry_split == np.inf
+    mask_edge = (obj_model.geometric_symmetry_split >= 3) & (obj_model.geometric_symmetry_split <= 4)
+    mask_5toinf = (obj_model.geometric_symmetry_split < np.inf) & (obj_model.geometric_symmetry_split >= 5)
+    degree_max[~mask_inf] /= obj_model.geometric_symmetry_split[~mask_inf]
+    seg_max[mask_inf] = 1
+    seg_max[mask_edge] = min(2, config.n_seg)
+    seg_max[mask_5toinf] = 1
 
     # logger.debug(obj_model.geometric_symmetry)
     # logger.debug(obj_model.geometric_symmetry_split)
@@ -33,17 +33,20 @@ def icp_init(obj_model: ObjModel):
     # logger.debug(*seg_max)
     # exit(0)
 
+    R_init_list = []
     for i, j, k in np.ndindex(*seg_max):
         R_init = euler2mat(i * 2 * degree_max[i] / seg_max[i],
                            j * 2 * degree_max[j] / seg_max[j],
                            k * 2 * degree_max[k] / seg_max[k])
-        yield R_init
+        R_init_list.append(R_init)
+
+    return R_init_list
 
 
 # Run ICP
 def icp_solve(src: np.ndarray, gt: np.ndarray, kdtree: neighbors.KDTree,
               R_init: np.ndarray = np.eye(3), t_init: np.ndarray = np.zeros(3),
-              max_iterations: int = 10000, tolerance: float = 1e-6) -> Tuple[np.ndarray, np.ndarray, float]:
+              max_iterations: int = 10000, tolerance: float = 1e-8) -> Tuple[np.ndarray, np.ndarray, float]:
     # logger.info('')
     # logger.info(f'R_init = \n{R_init}')
     # logger.info(f't_init = \n{t_init}')
@@ -90,7 +93,7 @@ def icp_solve(src: np.ndarray, gt: np.ndarray, kdtree: neighbors.KDTree,
 
 
 def icp(src: np.ndarray, gt: np.ndarray, obj_model: ObjModel,
-        max_iterations: int = 10000, tolerance: float = 1e-6) -> Tuple[np.ndarray, np.ndarray, float]:
+        max_iterations: int = 10000, tolerance: float = 1e-8) -> Tuple[np.ndarray, np.ndarray, float]:
     """
     Iterative Closest Point (ICP) algorithm.
     """
@@ -106,18 +109,21 @@ def icp(src: np.ndarray, gt: np.ndarray, obj_model: ObjModel,
     #     return R_inv, -R_inv @ t, loss
 
     loss_min = math.inf
-    if obj_model.geometric_symmetry == 'no':
+    init_list = icp_init(obj_model)
+    # print(len(init_list))
+    if len(init_list) == config.n_seg ** 3:
         kdtree = neighbors.KDTree(gt)
-        for R_init in icp_init(obj_model):
+        for R_init in init_list:
             t_init = np.mean(gt, axis=0) - np.mean(src @ R_init.T, axis=0)
             R, t, loss = icp_solve(src=src, gt=gt, kdtree=kdtree, R_init=R_init, t_init=t_init,
                                    max_iterations=max_iterations, tolerance=tolerance)
             if loss < loss_min:
                 R_ans, t_ans, loss_min = R, t, loss
-            if loss_min < config.loss_tolerance_multi_init:
+            # print(loss / obj_model.oblique_axis)
+            if loss_min / obj_model.oblique_axis < config.loss_tolerance_multi_init:
                 break
     else:
-        for R_init in icp_init(obj_model):
+        for R_init in init_list:
             t_init = np.mean(src, axis=0) - np.mean(gt @ R_init.T, axis=0)
             gt_init = gt @ R_init.T + t_init
             kdtree = neighbors.KDTree(gt_init)
@@ -128,31 +134,32 @@ def icp(src: np.ndarray, gt: np.ndarray, obj_model: ObjModel,
                 R = R_init_inv @ R
                 t = R_init_inv @ (t - t_init)
                 R_ans, t_ans, loss_min = R, t, loss
-            if loss_min < config.loss_tolerance_multi_init:
+            # print(loss / obj_model.oblique_axis)
+            if loss_min / obj_model.oblique_axis < config.loss_tolerance_multi_init:
                 break
 
     return R_ans, t_ans, loss_min
 
 
-def test_icp():
-    max_iterations = 2000
-    n = 10000
-    x = np.random.rand(n, 3)
-    R = euler2mat(11, 62, 13)
-    t = np.array([0, 0, 0])
-    y = x @ R.T + t
-
-    R_ans, t_ans, loss = icp(x, y, max_iterations)
-    logger.debug(f"R    : \n{R}")
-    logger.debug(f"R_ans: \n{R_ans}")
-    logger.debug(f"t    : {t}")
-    logger.debug(f"t_ans: {t_ans}")
-    logger.debug(f"loss : {loss}")
-
-    y_ans = x @ R_ans.T + t_ans
-    logger.debug(f"y : \n{y}")
-    logger.debug(f"y_ans: \n{y_ans}")
-
-
-if __name__ == '__main__':
-    test_icp()
+# def test_icp():
+#     max_iterations = 2000
+#     n = 10000
+#     x = np.random.rand(n, 3)
+#     R = euler2mat(11, 62, 13)
+#     t = np.array([0, 0, 0])
+#     y = x @ R.T + t
+#
+#     R_ans, t_ans, loss = icp(x, y, max_iterations)
+#     logger.debug(f"R    : \n{R}")
+#     logger.debug(f"R_ans: \n{R_ans}")
+#     logger.debug(f"t    : {t}")
+#     logger.debug(f"t_ans: {t_ans}")
+#     logger.debug(f"loss : {loss}")
+#
+#     y_ans = x @ R_ans.T + t_ans
+#     logger.debug(f"y : \n{y}")
+#     logger.debug(f"y_ans: \n{y_ans}")
+#
+#
+# if __name__ == '__main__':
+#     test_icp()

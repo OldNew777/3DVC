@@ -153,6 +153,11 @@ def load_meta(obj_model_list: ObjList, rgb: np.ndarray, depth: np.ndarray, label
     extinstic_t = extrinsic[:3, 3]
     world_space = (camera_space - extinstic_t.T) @ np.linalg.inv(extinstic_R).T
 
+    world_space_list = []
+    model_space_list = []
+    pose_world_list = []
+    box_sizes_list = []
+
     for obj_id in meta['object_ids']:
         obj_model = obj_model_list[obj_id]
         scales = meta['scales'][obj_id].reshape(1, 3)
@@ -169,7 +174,12 @@ def load_meta(obj_model_list: ObjList, rgb: np.ndarray, depth: np.ndarray, label
         # generate points from depth and mask
         world_coord = world_space[mask]
 
-        yield world_coord, model_coord, pose_world, box_sizes
+        world_space_list.append(world_coord)
+        model_space_list.append(model_coord)
+        pose_world_list.append(pose_world)
+        box_sizes_list.append(box_sizes)
+
+    return world_space_list, model_space_list, pose_world_list, box_sizes_list
 
 
 @time_it
@@ -189,19 +199,22 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
         n_correct = extra_info['n_correct']
 
     if algo_type == 'icp':
-        with tqdm(range(len(output), len(test_dataset)), desc='ICP', ncols=80) as pbar:
+        with tqdm(range(len(test_dataset)), desc='ICP', ncols=80) as pbar:
             for i in pbar:
                 rgb, depth, label, meta, prefix = test_dataset[i]
+                if prefix in output:
+                    continue
+
                 output[prefix] = {}
                 pose_world_predict_list = [None for _ in range(config.n_obj)]
 
                 for obj_index, (world_coord, model_coord, pose_world, box_sizes) in \
-                        enumerate(load_meta(obj_model_list, rgb, depth, label, meta)):
+                        enumerate(zip(*load_meta(obj_model_list, rgb, depth, label, meta))):
                     obj_id = meta['object_ids'][obj_index]
                     obj_model = obj_model_list[obj_id]
 
                     # try to match part of the model to the whole
-                    R, t, loss = icp(world_coord, model_coord, obj_model, config.icp_max_iter)
+                    R, t, loss = icp(world_coord, model_coord, obj_model, config.icp_max_iter, config.icp_tolerance)
                     R_inv = np.linalg.inv(R)
                     R, t = R_inv, -R_inv @ t
 
