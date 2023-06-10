@@ -149,11 +149,9 @@ def load_meta(obj_model_list: ObjList, rgb: np.ndarray, depth: np.ndarray, label
     v, u = np.indices(z.shape)
     uv1 = np.stack([u + 0.5, v + 0.5, np.ones_like(z)], axis=-1)
     camera_space = uv1 @ np.linalg.inv(intrinsic).T * z[..., None]  # [H, W, 3]
-
-    world_coord_list = []
-    model_coord_list = []
-    pose_world_list = []
-    box_sizes_list = []
+    extinstic_R = extrinsic[:3, :3]
+    extinstic_t = extrinsic[:3, 3]
+    world_space = (camera_space - extinstic_t.T) @ np.linalg.inv(extinstic_R).T
 
     for obj_id in meta['object_ids']:
         obj_model = obj_model_list[obj_id]
@@ -161,25 +159,17 @@ def load_meta(obj_model_list: ObjList, rgb: np.ndarray, depth: np.ndarray, label
         model_coord = sample_points_even(obj_model.mesh, config.n_sample_points) * scales
 
         pose_world = meta['poses_world'][obj_id]
-        box_sizes = meta['extents'][obj_id] * meta['scales'][obj_id]
+        box_sizes = meta['extents'][obj_id] * scales
         # logger.debug(f'camera_space.shape: {camera_space.shape}')
         # logger.debug(f'extrinsic.shape: {extrinsic.shape}')
         # exit(0)
-        extinstic_R = extrinsic[:3, :3]
-        extinstic_t = extrinsic[:3, 3]
-        world_space = (camera_space - extinstic_t.T) @ np.linalg.inv(extinstic_R).T
 
         # find the position where label == index
         mask = np.abs(label - obj_id) < 1e-1
         # generate points from depth and mask
         world_coord = world_space[mask]
 
-        world_coord_list.append(world_coord)
-        model_coord_list.append(model_coord)
-        pose_world_list.append(pose_world)
-        box_sizes_list.append(box_sizes)
-
-    return world_coord_list, model_coord_list, pose_world_list, box_sizes_list
+        yield world_coord, model_coord, pose_world, box_sizes
 
 
 @time_it
@@ -198,10 +188,13 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
                 output[prefix] = {}
                 pose_world_predict_list = [None for _ in range(config.n_obj)]
 
-                world_coord_list, model_coord_list, pose_world_list, box_sizes_list = load_meta(obj_model_list, rgb, depth, label, meta)
                 for obj_index, (world_coord, model_coord, pose_world, box_sizes) in \
-                        enumerate(zip(world_coord_list, model_coord_list, pose_world_list, box_sizes_list)):
-                    R, t, loss = icp(model_coord, world_coord, config.icp_max_iter)
+                        enumerate(load_meta(obj_model_list, rgb, depth, label, meta)):
+                    # try to match part of the model to the whole
+                    R, t, loss = icp(world_coord, model_coord, config.icp_max_iter)
+                    R_inv = np.linalg.inv(R)
+                    R, t = R_inv, -R_inv @ t
+
                     pose_world_pred = np.eye(4)
                     pose_world_pred[:3, :3] = R
                     pose_world_pred[:3, 3] = t

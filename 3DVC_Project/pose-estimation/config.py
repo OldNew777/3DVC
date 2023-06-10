@@ -24,6 +24,7 @@ class Config:
         self.n_obj = 79
         self.n_seg = 3
         self.visualize = True
+        self.visualize_icp_iter = False
 
         self.icp_max_iter = 500
 

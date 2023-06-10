@@ -57,7 +57,7 @@ def visualize_point_cloud(*points):
 
 
 VERTEX_COLORS = [
-    (0, 0, 0),
+    # (0, 0, 0),
     (1, 0, 0),
     (0, 1, 0),
     (0, 0, 1),

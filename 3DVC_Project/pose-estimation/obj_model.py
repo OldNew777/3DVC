@@ -19,7 +19,7 @@ COLOR_PALETTE[-1] = [255, 255, 225]
 
 
 def sample_points_even(mesh: trimesh.Trimesh, num: int) -> np.ndarray:
-    sampled_points, sampled_face_index = trimesh.sample.sample_surface_even(mesh, num)
+    sampled_points, sampled_face_index = trimesh.sample.sample_surface(mesh, num)
     return np.array(sampled_points)
 
 
