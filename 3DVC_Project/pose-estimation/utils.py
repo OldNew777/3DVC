@@ -41,23 +41,18 @@ def CDLoss_np(x: np.ndarray, y: np.ndarray) -> float:
         np.sum(d_y, axis=dimension - 2) / d2.shape[-1]
 
 
-def visualize_point_cloud(src: np.ndarray, R: np.ndarray = np.eye(3), t: np.ndarray = np.zeros(3), gt: np.ndarray = None):
-    # predicted point cloud, red
-    points_src = src @ R.T + t
-    colors_src = np.tile([1, 0, 0], (src.shape[0], 1))
+def visualize_point_cloud(*points):
+    pcd = o3d.geometry.PointCloud()
 
-    if gt is None:
-        points_gt = np.zeros((0, 3))
-        colors_gt = np.zeros((0, 3))
-    else:
-        # gt point cloud, green
-        points_gt = gt
-        colors_gt = np.tile([0, 1, 0], (gt.shape[0], 1))
+    # different colors for different point clouds
+    for i, point in enumerate(points):
+        color = np.array(VERTEX_COLORS[i % len(VERTEX_COLORS)])
+        pcd_t = o3d.geometry.PointCloud()
+        pcd_t.points = o3d.utility.Vector3dVector(point)
+        pcd_t.colors = o3d.utility.Vector3dVector(np.tile(color, (point.shape[0], 1)))
+        pcd += pcd_t
 
     # visualize
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(np.concatenate([points_src, points_gt], axis=0))
-    pcd.colors = o3d.utility.Vector3dVector(np.concatenate([colors_src, colors_gt], axis=0))
     o3d.visualization.draw_geometries([pcd])
 
 

@@ -14,7 +14,7 @@ from config import *
 
 def icp(src: np.ndarray,
         gt: np.ndarray,
-        max_iterations: int = 500, tolerance: float = 1e-5) -> Tuple[np.ndarray, np.ndarray, float]:
+        max_iterations: int = 500, tolerance: float = 1e-6) -> Tuple[np.ndarray, np.ndarray, float]:
     """
     Iterative Closest Point (ICP) algorithm.
     """
@@ -34,6 +34,7 @@ def icp(src: np.ndarray,
         # logger.info(f't_init = \n{t_init}')
         R_ans, t_ans = R_init, t_init
         loss = math.inf
+        loss_new = 0.
         for i in range(max_iterations):
             # Find nearest neighbors between the current source and target points parallel
             x = src @ R_ans.T + t_ans
@@ -55,16 +56,21 @@ def icp(src: np.ndarray,
             R_ans = R @ R_ans
             t_ans = R @ t_ans + t
 
+            # Compute loss
+            loss_new = np.linalg.norm(x - y).item()
+
             # Check if converged (transformation is not updated)
-            if np.allclose(R, np.eye(3), atol=tolerance) and np.allclose(t, np.zeros(3), atol=tolerance):
+            if loss - loss_new < tolerance or loss_new < tolerance:
                 # probably fall into local minimum
                 break
+
+            loss = loss_new
 
         # Compute loss
         x = src @ R_ans.T + t_ans
         nearest_indices = kdtree.query(x)[1].reshape(-1)
         y = gt[nearest_indices]
-        loss = CDLoss_np(x, y)
+        loss = np.linalg.norm(x - y).item()
 
         return R_ans, t_ans, loss
 

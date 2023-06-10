@@ -35,6 +35,7 @@ class Config:
         self.batch_size = 64
         self.checkpoint_interval = 50
         self.validate_interval = 100
+        self.test_output_interval = 1  # value temporarily for debug
 
 
 config = Config()
