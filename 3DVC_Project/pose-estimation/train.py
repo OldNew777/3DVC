@@ -163,7 +163,10 @@ def load_meta(obj_model_list: ObjList, rgb: np.ndarray, depth: np.ndarray, label
         scales = meta['scales'][obj_id].reshape(1, 3)
         model_coord = sample_points_even(obj_model.mesh, config.n_sample_points) * scales
 
-        pose_world = meta['poses_world'][obj_id]
+        if 'poses_world' not in meta:
+            pose_world = None
+        else:
+            pose_world = meta['poses_world'][obj_id]
         box_sizes = meta['extents'][obj_id] * scales
         # logger.debug(f'camera_space.shape: {camera_space.shape}')
         # logger.debug(f'extrinsic.shape: {extrinsic.shape}')
@@ -182,9 +185,8 @@ def load_meta(obj_model_list: ObjList, rgb: np.ndarray, depth: np.ndarray, label
     return world_space_list, model_space_list, pose_world_list, box_sizes_list
 
 
-@time_it
 def test(algo_type: str = 'icp', nn_info: Tuple = None):
-    test_dataset = get_datasets('train')
+    test_dataset = get_datasets('test')
     obj_csv_path = os.path.join(config.testing_data_dir, 'objects_v1.csv')
     obj_model_list = ObjList(obj_csv_path)
 
@@ -199,9 +201,10 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
         n_correct = extra_info['n_correct']
 
     if algo_type == 'icp':
-        with tqdm(range(len(test_dataset)), desc='ICP', ncols=160) as pbar:
+        with tqdm(range(len(test_dataset)), ncols=160) as pbar:
             for i in pbar:
                 rgb, depth, label, meta, prefix = test_dataset[i]
+                pbar.set_description(f'ICP {prefix:9s}')
                 if prefix in output:
                     continue
 
@@ -210,6 +213,10 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
 
                 for obj_index, (world_coord, model_coord, pose_world, box_sizes) in \
                         enumerate(zip(*load_meta(obj_model_list, rgb, depth, label, meta))):
+                    # skip if label map is wrong
+                    if world_coord.shape[0] == 0:
+                        continue
+
                     obj_id = meta['object_ids'][obj_index]
                     obj_model = obj_model_list[obj_id]
 
@@ -223,8 +230,8 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
                     pose_world_pred[:3, 3] = t
                     pose_world_predict_list[obj_id] = pose_world_pred.tolist()
 
-                    # evaluate whether the prediction is correct
-                    r_diff, t_diff = eval(pose_world_pred, pose_world, obj_model.geometric_symmetry)
+                    # # evaluate whether the prediction is correct
+                    # r_diff, t_diff = eval(pose_world_pred, pose_world, obj_model.geometric_symmetry)
                     # # logger.info(f'------------------{prefix}------------------')
                     # # logger.info(f'obj_id = {obj_id}, obj_name = {obj_model.name}')
                     # # logger.info(f'loss = {loss:.06f}')
@@ -234,9 +241,8 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
                     # # logger.info(f"r_diff = {r_diff:.03f} degree, t_diff = {t_diff:.03f} cm")
                     # # exit(0)
 
-                    match = judge(r_diff, t_diff)
+                    # n_correct += judge(r_diff, t_diff)
                     n_all += 1
-                    n_correct += match
                     correct_rate = n_correct / n_all
                     pbar.set_postfix_str(f'correct ({n_correct}/{n_all}, {correct_rate:.06f})')
 

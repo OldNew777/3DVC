@@ -17,6 +17,7 @@ def icp_init(obj_model: ObjModel):
     degree_max = np.ones(3) * 2 * np.pi
     seg_max = np.ones(3, dtype=int) * config.n_seg
 
+    # Rotate the whole model to make use of the geometric symmetry
     mask_inf = obj_model.geometric_symmetry_split == np.inf
     mask_edge = (obj_model.geometric_symmetry_split >= 3) & (obj_model.geometric_symmetry_split <= 4)
     mask_5toinf = (obj_model.geometric_symmetry_split < np.inf) & (obj_model.geometric_symmetry_split >= 5)

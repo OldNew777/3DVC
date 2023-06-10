@@ -87,5 +87,11 @@ def get_datasets(data_type: str = 'train') -> LazyDataset:
         else:
             raise ValueError(f"Unknown data type {data_type}")
 
+    # sort prefix_list by level, scene, variant
+    def get_level_scene_variant(prefix):
+        level, scene, variant = prefix.split('-')
+        return int(level), int(scene), int(variant)
+    prefix_list.sort(key=get_level_scene_variant)
+
     dataset = LazyDataset(data_dir, prefix_list)
     return dataset

@@ -34,6 +34,7 @@ class ObjModel:
         self.path = os.path.join(config.data_dir, csv_row['location'])
         self.scene = trimesh.load(os.path.join(self.path, 'visual_meshes', 'visual.dae'))
         g = self.scene.geometry
+        assert len(g) == 1
         self.mesh = next(iter(g.values()))
 
         # read obj model's meta data (useless now)
