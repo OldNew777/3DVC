@@ -199,7 +199,7 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
         n_correct = extra_info['n_correct']
 
     if algo_type == 'icp':
-        with tqdm(range(len(test_dataset)), desc='ICP', ncols=80) as pbar:
+        with tqdm(range(len(test_dataset)), desc='ICP', ncols=160) as pbar:
             for i in pbar:
                 rgb, depth, label, meta, prefix = test_dataset[i]
                 if prefix in output:
@@ -270,7 +270,7 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
 
         with torch.no_grad():
             # tqdm
-            for iteration, batch in enumerate(tqdm.tqdm(test_dataloader, desc='NN', ncols=80)):
+            for iteration, batch in enumerate(tqdm.tqdm(test_dataloader, desc='NN', ncols=160)):
                 rgb, depth, label, meta, prefix = batch[0].values()
                 # process np raw to torch tensor
                 # TODO
