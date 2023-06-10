@@ -18,6 +18,8 @@ class Config:
 
         self.W = 1280
         self.H = 720
+        self.n_sample_points = 10000
+        self.n_obj = 79
 
         self.lr = 1e-4
         self.lr_scheduler_step_size = 1000
@@ -26,7 +28,7 @@ class Config:
         self.num_epochs = 1000
         self.batch_size = 64
         self.checkpoint_interval = 50
-        self.test_interval = 100
+        self.validate_interval = 100
 
 
 config = Config()

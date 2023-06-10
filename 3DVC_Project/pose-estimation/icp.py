@@ -12,7 +12,7 @@ from mylogger import logger
 @time_it
 def icp(src: np.ndarray,
         gt: np.ndarray,
-        max_iterations: int = 1000, tolerance: float = 1e-5):
+        max_iterations: int = 1000, tolerance: float = 1e-5) -> Tuple[np.ndarray, np.ndarray, float]:
     """
     Iterative Closest Point (ICP) algorithm.
     """

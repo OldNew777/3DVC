@@ -12,6 +12,8 @@ from model import *
 from config import *
 from dataset import *
 from obj_model import *
+from icp import icp
+from eval import *
 
 
 def save_state_dict(model: torch.nn.Module, optimizer: torch.optim.Optimizer, epoch: int):
@@ -76,19 +78,27 @@ def create_model(mode: str = 'train'):
 def train():
     model, optimizer, lr_scheduler, start_epoch = create_model('train')
 
-    dataset = get_datasets('train')
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
+    train_dataset = get_datasets('train')
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset,
         batch_size=config.batch_size,
         shuffle=True,
+        num_workers=0,
+        collate_fn=lambda batch: batch,
+    )
+    validate_dataset = get_datasets('validate')
+    validate_dataloader = torch.utils.data.DataLoader(
+        validate_dataset,
+        batch_size=config.batch_size,
+        shuffle=False,
         num_workers=0,
         collate_fn=lambda batch: batch,
     )
 
     t_range = tqdm.tqdm(range(start_epoch, config.num_epochs))
     for epoch in t_range:
-        for iteration, batch in enumerate(dataloader):
-            rgb, depth, label, meta = batch[0].values()
+        for iteration, batch in enumerate(train_dataloader):
+            rgb, depth, label, meta, prefix = batch[0].values()
             # process np raw to torch tensor
             # TODO
 
@@ -113,40 +123,10 @@ def train():
             logger.info(f'Saving checkpoint {epoch}')
             save_state_dict(model, optimizer, epoch)
 
-        if epoch % config.test_interval == 0 and epoch > 0:
-            eval('nn', (model, optimizer, lr_scheduler, epoch))
-
-
-@time_it
-def eval(algo_type: str = 'icp', nn_info: Tuple = None):
-    dataset = get_datasets('test')
-    obj_csv_path = os.path.join(config.testing_data_dir, 'objects_v1.csv')
-    obj_model_list = ObjList(obj_csv_path)
-
-    if algo_type == 'icp':
-        for i in tqdm(range(len(dataset)), desc='ICP', ncols=80):
-            rgb, depth, label, meta = dataset[i]
-
-
-
-    elif algo_type == 'nn':
-        if nn_info is None:
-            model, optimizer, lr_scheduler, start_epoch = create_model('test')
-        else:
-            model, optimizer, lr_scheduler, start_epoch = nn_info
-
-        test_dataloader = torch.utils.data.DataLoader(
-            dataset,
-            batch_size=config.batch_size,
-            shuffle=True,
-            num_workers=0,
-            collate_fn=lambda batch: batch,
-        )
-
-        with torch.no_grad():
-            # tqdm
-            for iteration, batch in enumerate(tqdm.tqdm(test_dataloader, desc='NN', ncols=80)):
-                rgb, depth, label, meta = batch[0].values()
+        # Validate
+        if epoch % config.validate_interval == 0 and epoch > 0:
+            for iteration, batch in enumerate(validate_dataloader):
+                rgb, depth, label, meta, prefix = batch[0].values()
                 # process np raw to torch tensor
                 # TODO
 
@@ -157,12 +137,124 @@ def eval(algo_type: str = 'icp', nn_info: Tuple = None):
                 loss = None
 
 
+def load_meta(obj_model_list: ObjList, rgb: np.ndarray, depth: np.ndarray, label: np.ndarray, meta: dict):
+    n_obj = len(meta['object_ids'])
+    extrinsic = meta['extrinsic']
+    intrinsic = meta['intrinsic']
+    H = rgb.shape[0]
+    W = rgb.shape[1]
+    z = depth
+    v, u = np.indices(z.shape)
+    uv1 = np.stack([u + 0.5, v + 0.5, np.ones_like(z)], axis=-1)
+    camera_space = uv1 @ np.linalg.inv(intrinsic).T * z[..., None]  # [H, W, 3]
+
+    src_list = []
+    gt_list = []
+    pose_world_list = []
+    box_sizes_list = []
+
+    for index in meta['object_ids']:
+        obj_model = obj_model_list[index]
+        scales = meta['scales'][index].reshape(1, 3)
+        gt = sample_points_even(obj_model.mesh, config.n_sample_points) * scales
+
+        pose_world = meta['poses_world'][index]
+        box_sizes = meta['extents'][index] * meta['scales'][index]
+        # logger.debug(f'camera_space.shape: {camera_space.shape}')
+        # logger.debug(f'extrinsic.shape: {extrinsic.shape}')
+        # exit(0)
+        extinstic_R = extrinsic[:3, :3]
+        extinstic_t = extrinsic[:3, 3]
+        world_space = (camera_space - extinstic_t.T) @ extinstic_R.T
+
+        # find the position where label == index
+        mask = np.abs(label - index) < 1e-1
+        # generate points from depth and mask
+        n_src = mask.sum()
+        src = np.zeros((n_src, 3))
+        src[:, :2] = world_space[..., :2][mask]
+        src[:, 2] = z[mask]
+
+        src_list.append(src)
+        gt_list.append(gt)
+        pose_world_list.append(pose_world)
+        box_sizes_list.append(box_sizes)
+
+    return src_list, gt_list, pose_world_list, box_sizes_list
+
+
+@time_it
+def test(algo_type: str = 'icp', nn_info: Tuple = None):
+    test_dataset = get_datasets('train')
+    obj_csv_path = os.path.join(config.testing_data_dir, 'objects_v1.csv')
+    obj_model_list = ObjList(obj_csv_path)
+    output = {}
+
+    if algo_type == 'icp':
+        n_all = 0
+        n_correct = 0
+        with tqdm(range(len(test_dataset)), desc='ICP', ncols=80) as pbar:
+            for i in pbar:
+                rgb, depth, label, meta, prefix = test_dataset[i]
+                output[prefix] = {}
+                pose_world_predict_list = [None for _ in range(config.n_obj)]
+
+                src_list, gt_list, pose_world_list, box_sizes_list = load_meta(obj_model_list, rgb, depth, label, meta)
+                for obj_id, (src, gt, pose_world, box_sizes) in \
+                        enumerate(zip(src_list, gt_list, pose_world_list, box_sizes_list)):
+                    R, t, _ = icp(src, gt)
+                    pose_world_pred = np.eye(4)
+                    pose_world_pred[:3, :3] = R
+                    pose_world_pred[:3, 3] = t
+                    pose_world_predict_list[obj_id] = list(pose_world_pred)
+
+                    # evaluate whether the prediction is correct
+                    r_diff, t_diff = eval(pose_world_pred, pose_world, obj_model_list[obj_id].geometric_symmetry)
+                    match = judge(r_diff, t_diff)
+                    n_all += 1
+                    n_correct += match
+                    correct_rate = n_correct / n_all
+                    pbar.set_postfix_str(f'correct ({n_correct}/{n_all}, {correct_rate:.06f})')
+
+                output[prefix]['poses_world'] = pose_world_predict_list
+
+
+    elif algo_type == 'nn':
+        if nn_info is None:
+            model, optimizer, lr_scheduler, start_epoch = create_model('test')
+        else:
+            model, optimizer, lr_scheduler, start_epoch = nn_info
+
+        test_dataloader = torch.utils.data.DataLoader(
+            test_dataset,
+            batch_size=config.batch_size,
+            shuffle=True,
+            num_workers=0,
+            collate_fn=lambda batch: batch,
+        )
+
+        with torch.no_grad():
+            # tqdm
+            for iteration, batch in enumerate(tqdm.tqdm(test_dataloader, desc='NN', ncols=80)):
+                rgb, depth, label, meta, prefix = batch[0].values()
+                # process np raw to torch tensor
+                # TODO
+
+                # Run model forward
+                # out = model()
+
+                # Compute loss
+                loss = None
+    else:
+        raise ValueError(f'Unknown algo_type {algo_type}')
+
+
 def main():
     if config.algo_type == 'nn':
         train()
-        eval('nn')
+        test('nn')
     elif config.algo_type == 'icp':
-        eval('icp')
+        test('icp')
 
 
 if __name__ == "__main__":

@@ -39,7 +39,7 @@ def CDLoss_np(x: np.ndarray, y: np.ndarray) -> float:
     d_x = np.min(d2, axis=dimension - 1)
     d_y = np.min(d2, axis=dimension - 2)
     return np.sum(d_x, axis=dimension - 2) / d2.shape[-2] + \
-           np.sum(d_y, axis=dimension - 2) / d2.shape[-1]
+        np.sum(d_y, axis=dimension - 2) / d2.shape[-1]
 
 
 VERTEX_COLORS = [
@@ -115,3 +115,11 @@ def draw_projected_box3d(image, center, size, rotation, extrinsic, intrinsic, co
     for i, (u, v) in enumerate(uv):
         cv2.circle(image, (u, v), radius=1, color=VERTEX_COLORS[i], thickness=1)
     return image
+
+
+def draw_all_projected_box3d(image, pose_world, box_sizes, extrinsic, intrinsic, color=(0, 1, 0), thickness=2):
+    boxed_image = np.array(image)
+    for i in range(len(pose_world)):
+        draw_projected_box3d(boxed_image, pose_world[i][:3, 3],
+                             box_sizes[i], pose_world[i][:3, :3], extrinsic, intrinsic, color, thickness)
+    return boxed_image

@@ -77,6 +77,13 @@ def eval(pred_pose, gt_pose, geometric_symmetry):
     return r_diff, t_diff
 
 
+def judge(r_diff, t_diff) -> bool:
+    if r_diff < 5 and t_diff < 0.01:
+        return True
+    else:
+        return False
+
+
 def test_eval():
     # define geometric symmetry
     geometric_symmetry = "zinf|x4"
