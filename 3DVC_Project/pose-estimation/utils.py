@@ -5,6 +5,7 @@ import numpy as np
 import cv2
 from sklearn import metrics
 from transforms3d.quaternions import quat2mat
+import open3d as o3d
 
 from mylogger import logger
 
@@ -33,13 +34,31 @@ def CDLoss_np(x: np.ndarray, y: np.ndarray) -> float:
     """
     # Chamfer Distance Loss
     d2 = metrics.euclidean_distances(x, y)
-    print(d2.shape)
-    print(d2)
     dimension = len(d2.shape)
     d_x = np.min(d2, axis=dimension - 1)
     d_y = np.min(d2, axis=dimension - 2)
     return np.sum(d_x, axis=dimension - 2) / d2.shape[-2] + \
         np.sum(d_y, axis=dimension - 2) / d2.shape[-1]
+
+
+def visualize_point_cloud(src: np.ndarray, R: np.ndarray = np.eye(3), t: np.ndarray = np.zeros(3), gt: np.ndarray = None):
+    # predicted point cloud, red
+    points_src = src @ R.T + t
+    colors_src = np.tile([1, 0, 0], (src.shape[0], 1))
+
+    if gt is None:
+        points_gt = np.zeros((0, 3))
+        colors_gt = np.zeros((0, 3))
+    else:
+        # gt point cloud, green
+        points_gt = gt
+        colors_gt = np.tile([0, 1, 0], (gt.shape[0], 1))
+
+    # visualize
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(np.concatenate([points_src, points_gt], axis=0))
+    pcd.colors = o3d.utility.Vector3dVector(np.concatenate([colors_src, colors_gt], axis=0))
+    o3d.visualization.draw_geometries([pcd])
 
 
 VERTEX_COLORS = [

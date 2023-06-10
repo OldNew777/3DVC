@@ -47,7 +47,7 @@ class ObjModel:
         self.height = csv_row['height']
 
         def load_symmetry(symmetry_str: str) -> np.ndarray:
-            symmetry = np.zeros(3)
+            symmetry = np.ones(3)
             if symmetry_str == 'no':
                 return symmetry
 

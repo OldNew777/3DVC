@@ -3,6 +3,7 @@ import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 import shutil
 import tqdm
+import json
 
 import numpy as np
 import torch
@@ -165,15 +166,13 @@ def load_meta(obj_model_list: ObjList, rgb: np.ndarray, depth: np.ndarray, label
         # exit(0)
         extinstic_R = extrinsic[:3, :3]
         extinstic_t = extrinsic[:3, 3]
-        world_space = (camera_space - extinstic_t.T) @ extinstic_R.T
+        world_space = (camera_space - extinstic_t.T) @ np.linalg.inv(extinstic_R).T
 
         # find the position where label == index
         mask = np.abs(label - index) < 1e-1
         # generate points from depth and mask
         n_src = mask.sum()
-        src = np.zeros((n_src, 3))
-        src[:, :2] = world_space[..., :2][mask]
-        src[:, 2] = z[mask]
+        src = world_space[mask]
 
         src_list.append(src)
         gt_list.append(gt)
@@ -200,24 +199,43 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
                 pose_world_predict_list = [None for _ in range(config.n_obj)]
 
                 src_list, gt_list, pose_world_list, box_sizes_list = load_meta(obj_model_list, rgb, depth, label, meta)
-                for obj_id, (src, gt, pose_world, box_sizes) in \
+                for obj_index, (src, gt, pose_world, box_sizes) in \
                         enumerate(zip(src_list, gt_list, pose_world_list, box_sizes_list)):
-                    R, t, _ = icp(src, gt)
+                    R, t, loss = icp(src, gt, config.icp_max_iter)
                     pose_world_pred = np.eye(4)
                     pose_world_pred[:3, :3] = R
                     pose_world_pred[:3, 3] = t
+                    obj_id = meta['object_ids'][obj_index]
                     pose_world_predict_list[obj_id] = list(pose_world_pred)
 
                     # evaluate whether the prediction is correct
                     r_diff, t_diff = eval(pose_world_pred, pose_world, obj_model_list[obj_id].geometric_symmetry)
+                    logger.info(f'------------------{prefix}------------------')
+                    logger.info(f'obj_id = {obj_id}, obj_name = {obj_model_list[obj_id].name}')
+                    logger.info(f'loss = {loss:.06f}')
+                    logger.info(f'pose_world_pred =\n{pose_world_pred}')
+                    logger.info(f'pose_world =\n{pose_world} degree')
+                    logger.info(f'geometric_symmetry = {obj_model_list[obj_id].geometric_symmetry}')
+                    logger.info(f"r_diff = {r_diff:.03f} degree, t_diff = {t_diff:.03f} cm")
+                    # exit(0)
                     match = judge(r_diff, t_diff)
                     n_all += 1
                     n_correct += match
                     correct_rate = n_correct / n_all
                     pbar.set_postfix_str(f'correct ({n_correct}/{n_all}, {correct_rate:.06f})')
 
+                    # visualize
+                    if config.visualize:
+                        visualize_point_cloud(src, R, t, gt)
+
                 output[prefix]['poses_world'] = pose_world_predict_list
 
+                if i % 100 == 0 and i > 0:
+                    with open(os.path.join(config.output_dir, 'output.json'), 'w') as f:
+                        json.dump(output, f, indent=4)
+
+        with open(os.path.join(config.output_dir, 'output.json'), 'w') as f:
+            json.dump(output, f, indent=4)
 
     elif algo_type == 'nn':
         if nn_info is None:

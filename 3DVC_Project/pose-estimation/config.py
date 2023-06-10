@@ -12,6 +12,8 @@ class Config:
         self.obj_model_dir = os.path.join(self.data_dir, 'model')
         self.nn_model_dir = os.path.join(self.data_dir, 'nnModel')
         self.output_dir = os.path.join(self.data_dir, 'output', self.algo_type)
+        os.makedirs(self.nn_model_dir, exist_ok=True)
+        os.makedirs(self.output_dir, exist_ok=True)
 
         self.device_ids = [i for i in range(torch.cuda.device_count())]
         self.default_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -20,6 +22,10 @@ class Config:
         self.H = 720
         self.n_sample_points = 10000
         self.n_obj = 79
+        self.n_seg = 3
+        self.visualize = True
+
+        self.icp_max_iter = 500
 
         self.lr = 1e-4
         self.lr_scheduler_step_size = 1000

@@ -1,6 +1,8 @@
 import numpy as np
 from transforms3d.euler import euler2mat
 
+from mylogger import logger
+
 
 def eval_rdiff_with_sym_axis(pred_rotation, gt_rotation, sym_axis):
     """
@@ -78,10 +80,7 @@ def eval(pred_pose, gt_pose, geometric_symmetry):
 
 
 def judge(r_diff, t_diff) -> bool:
-    if r_diff < 5 and t_diff < 0.01:
-        return True
-    else:
-        return False
+    return r_diff < 5 and t_diff < 1
 
 
 def test_eval():

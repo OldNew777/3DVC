@@ -1,4 +1,5 @@
 import math
+from typing import List, Tuple
 
 import numpy as np
 from tqdm import tqdm
@@ -7,12 +8,13 @@ from transforms3d.euler import euler2mat
 
 from utils import *
 from mylogger import logger
+from obj_model import ObjModel
+from config import *
 
 
-@time_it
 def icp(src: np.ndarray,
         gt: np.ndarray,
-        max_iterations: int = 1000, tolerance: float = 1e-5) -> Tuple[np.ndarray, np.ndarray, float]:
+        max_iterations: int = 500, tolerance: float = 1e-5) -> Tuple[np.ndarray, np.ndarray, float]:
     """
     Iterative Closest Point (ICP) algorithm.
     """
@@ -27,9 +29,9 @@ def icp(src: np.ndarray,
 
     # Run ICP
     def icp_solve(R_init: np.ndarray, t_init: np.ndarray) -> Tuple[np.ndarray, np.ndarray, float]:
-        logger.info('')
-        logger.info(f'R_init = \n{R_init}')
-        logger.info(f't_init = \n{t_init}')
+        # logger.info('')
+        # logger.info(f'R_init = \n{R_init}')
+        # logger.info(f't_init = \n{t_init}')
         R_ans, t_ans = R_init, t_init
         loss = math.inf
         for i in range(max_iterations):
@@ -39,10 +41,6 @@ def icp(src: np.ndarray,
             y = gt[nearest_indices]
             x_average = np.mean(x, axis=0)
             y_average = np.mean(y, axis=0)
-
-            # Compute loss
-            # TODO: CD Loss?
-            loss = np.linalg.norm(x - y, axis=1, ord=2).mean()
 
             # Compute transformation matrix that minimizes the average distance between the source and target points
             H = (y - y_average).T @ (x - x_average)
@@ -62,18 +60,32 @@ def icp(src: np.ndarray,
                 # probably fall into local minimum
                 break
 
+        # Compute loss
+        x = src @ R_ans.T + t_ans
+        nearest_indices = kdtree.query(x)[1].reshape(-1)
+        y = gt[nearest_indices]
+        loss = CDLoss_np(x, y)
+
         return R_ans, t_ans, loss
 
     # Initialize transformation
-    def icp_init(src: np.ndarray, gt: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        # aabb_src = np.array([np.min(src, axis=0), np.max(src, axis=0)])
-        # aabb_gt = np.array([np.min(gt, axis=0), np.max(gt, axis=0)])
-        R_init = np.eye(3)
-        t_init = np.mean(gt, axis=0) - np.mean(src @ R_init.T, axis=0)
-        return R_init, t_init
-    R_init, t_init = icp_init(src, gt)
+    def icp_init(src: np.ndarray, gt: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray]]:
+        for i in range(config.n_seg):
+            for j in range(config.n_seg):
+                for k in range(config.n_seg):
+                    R_init = euler2mat(i * 2 * np.pi / config.n_seg,
+                                       j * 2 * np.pi / config.n_seg,
+                                       k * 2 * np.pi / config.n_seg)
+                    t_init = np.mean(gt, axis=0) - np.mean(src @ R_init.T, axis=0)
+                    yield R_init, t_init
 
-    return icp_solve(R_init, t_init)
+    loss_min = math.inf
+    for R_init, t_init in icp_init(src, gt):
+        R, t, loss = icp_solve(R_init, t_init)
+        if loss < loss_min:
+            R_ans, t_ans, loss_min = R, t, loss
+
+    return R_ans, t_ans, loss_min
 
 
 def test_icp():
