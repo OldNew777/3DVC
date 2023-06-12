@@ -3,6 +3,7 @@ import time
 
 import numpy as np
 import cv2
+import torch
 from sklearn import metrics
 from transforms3d.quaternions import quat2mat
 import open3d as o3d
@@ -22,23 +23,34 @@ def time_it(func):
     return wrapper
 
 
+def from_6Dpose_to_R(a1: torch.Tensor, a2: torch.Tensor) -> torch.Tensor:
+    """
+    Convert 6D pose to rotation matrix.
+    """
+    # a1, a2: (3, 1)
+    a1 = a1.squeeze()
+    a2 = a2.squeeze()
+    b1 = a1 / torch.norm(a1)
+    b2 = a2 - torch.inner(a2, b1) * b1
+    b2 = b2 / torch.norm(b2)
+    b3 = torch.cross(b1, b2)
+    return torch.stack([b1, b2, b3], dim=1)
+
+
+def from_R_to_6Dpose(R: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Convert rotation matrix to 6D pose.
+    """
+    # R: (3, 3)
+    b1 = R[:, 0]
+    b2 = R[:, 1]
+    return b1, b2
+
+
 def normalize(v: np.ndarray) -> np.ndarray:
     """Normalize a vector.
     """
     return v / np.linalg.norm(v)
-
-
-def CDLoss_np(x: np.ndarray, y: np.ndarray) -> float:
-    """
-    CD Loss.
-    """
-    # Chamfer Distance Loss
-    d2 = metrics.euclidean_distances(x, y)
-    dimension = len(d2.shape)
-    d_x = np.min(d2, axis=dimension - 1)
-    d_y = np.min(d2, axis=dimension - 2)
-    return np.sum(d_x, axis=dimension - 2) / d2.shape[-2] + \
-        np.sum(d_y, axis=dimension - 2) / d2.shape[-1]
 
 
 def visualize_point_cloud(*points):

@@ -62,6 +62,14 @@ class LazyDataset(Dataset):
         index = self._prefix_list.index(prefix)
         return self.__getitem__(index)
 
+    def get_all_meta(self):
+        meta_list = []
+        for prefix in self._prefix_list:
+            with open(os.path.join(self._dir, f'{prefix}_meta.pkl'), 'rb') as f:
+                meta = pickle.load(f)
+            meta_list.append(meta)
+        return meta_list
+
 
 def get_datasets(data_type: str = 'train') -> LazyDataset:
     if data_type == 'test':
@@ -91,6 +99,7 @@ def get_datasets(data_type: str = 'train') -> LazyDataset:
     def get_level_scene_variant(prefix):
         level, scene, variant = prefix.split('-')
         return int(level), int(scene), int(variant)
+
     prefix_list.sort(key=get_level_scene_variant)
 
     dataset = LazyDataset(data_dir, prefix_list)

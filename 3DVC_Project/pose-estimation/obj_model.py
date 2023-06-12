@@ -36,19 +36,27 @@ class ObjModel:
         g = self.scene.geometry
         assert len(g) == 1
         self.mesh = next(iter(g.values()))
+        self.points = sample_points_even(self.mesh, config.n_sample_points)
 
         # read obj model's meta data (useless now)
         self.obj_class = csv_row['class']
         self.source = csv_row['source']
         self.metric = csv_row['metric']
 
-        # read obj model's aabb
+        # read obj model's bounding information
         self.aabb_min = np.array([csv_row['min_x'], csv_row['min_y'], csv_row['min_z']])
         self.aabb_max = np.array([csv_row['max_x'], csv_row['max_y'], csv_row['max_z']])
         self.width = csv_row['width']
         self.length = csv_row['length']
         self.height = csv_row['height']
         self.oblique_axis = np.linalg.norm(self.aabb_max - self.aabb_min).item()
+
+        # transform obj model to [-1, 1]^3 for nn training
+        self.translate_to_0 = -(self.aabb_max + self.aabb_min) / 2
+        v = self.points + self.translate_to_0
+        self.scale_to_1 = 1 / np.linalg.norm(v, axis=1, ord=2).max()
+        # print(np.linalg.norm((self.points + self.translate_to_0) * self.scale_to_1, axis=1, ord=2).max())
+        # exit(0)
 
         def load_symmetry(symmetry_str: str) -> np.ndarray:
             symmetry = np.ones(3)
