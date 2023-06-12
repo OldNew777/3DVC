@@ -25,7 +25,7 @@ class Config:
         self.multi_gpu = len(self.device_ids) > 1 and False
 
         self.n_obj = 79
-        self.visualize = True
+        self.visualize = False
         self.visualize_icp_iter = False
 
         self.n_sample_points = 10000
@@ -43,6 +43,7 @@ class Config:
         self.batch_size = 64
         self.checkpoint_interval = 1
         self.validate_interval = 100
+        self.checkpoint_interval_scene = 100
 
         self.test_output_interval = 10  # value temporarily for debug
 
