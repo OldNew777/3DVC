@@ -25,8 +25,9 @@ class Config:
         self.multi_gpu = len(self.device_ids) > 1 and False
 
         self.n_obj = 79
-        self.visualize = False
+        self.visualize = True
         self.visualize_icp_iter = False
+        self.visualize_scene_interval = 200
 
         self.n_sample_points = 10000
         self.icp_tolerance = 1e-9

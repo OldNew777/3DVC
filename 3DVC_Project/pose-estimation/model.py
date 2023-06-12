@@ -175,16 +175,19 @@ class PointNet(torch.nn.Module):
         self.conv9 = torch.nn.Conv1d(128, 64, 1)
         self.conv10 = torch.nn.Conv1d(64, 9, 1)
 
-    def forward(self, x):
+    def forward(self, x, model_points):
         n_points = x.shape[2]
+        n_points_model = model_points.shape[2]
+        N = n_points_model + n_points
 
         # (batch_size, 3, n_points)
-        x = self.relu(self.conv1(x))  # (batch_size, 64, n_points)
-        x = self.relu(self.conv2(x))  # (batch_size, 128, n_points)
-        x = self.relu(self.conv3(x))  # (batch_size, 256, n_points)
-        x = self.relu(self.conv4(x))  # (batch_size, 512, n_points)
-        x = self.conv5(x)  # (batch_size, 1024, n_points)
-        x = F.max_pool1d(x, kernel_size=n_points)  # (batch_size, 1024, 1)
+        x = torch.concat([x, model_points], 2)  # (batch_size, 3, N)
+        x = self.relu(self.conv1(x))  # (batch_size, 64, N)
+        x = self.relu(self.conv2(x))  # (batch_size, 128, N)
+        x = self.relu(self.conv3(x))  # (batch_size, 256, N)
+        x = self.relu(self.conv4(x))  # (batch_size, 512, N)
+        x = self.conv5(x)  # (batch_size, 1024, N)
+        x = F.max_pool1d(x, kernel_size=N)  # (batch_size, 1024, 1)
 
         x = self.relu(self.conv6(x))  # (batch_size, 512, 1)
         x = self.relu(self.conv7(x))  # (batch_size, 256, 1)

@@ -30,7 +30,8 @@ def save_state_dict(model: torch.nn.Module, optimizer: torch.optim.Optimizer, ep
 
 
 def load_state_dict(model: torch.nn.Module, optimizer: torch.optim.Optimizer, epoch: int, obj_id: int):
-    state_dict = torch.load(checkpoint_path(epoch, obj_id))
+    path = checkpoint_path(epoch, obj_id)
+    state_dict = torch.load(path)
     model.load_state_dict(state_dict['model'])
     # optimizer.load_state_dict(state_dict['optimizer'])
     assert epoch == state_dict['epoch']
@@ -64,6 +65,7 @@ def create_model(mode: str = 'train'):
 
         if load_from_checkpoint:
             start_scene = load_state_dict(model, optimizer, start_epoch, obj_id)
+            optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
 
         # multi-GPUs parallel
         if config.multi_gpu:
@@ -89,6 +91,7 @@ def create_model(mode: str = 'train'):
 
 def train():
     start_epoch, obj_nn_models = create_model('train')
+    start_scene = None
     n_multi_gpu = len(config.device_ids) if config.multi_gpu else 1
 
     train_dataset = get_datasets('train')
@@ -119,6 +122,11 @@ def train():
         loss_n = 0
         n_scene = len(train_dataset)
         for i in range(n_scene):
+            if start_scene is not None and \
+                    (i < start_scene and epoch == start_epoch) or \
+                    (0 == start_scene and epoch + 1 == start_epoch):
+                continue
+
             rgb, depth, label, meta, prefix = train_dataset[i]
 
             scene_str = f'{i}/{n_scene}'
@@ -133,6 +141,7 @@ def train():
                 # process np raw to torch tensor
                 obj_id = meta['object_ids'][obj_index]
                 obj_model = obj_model_list[obj_id]
+
                 model, optimizer, lr_scheduler, start_scene = obj_nn_models[obj_id]
                 if (i < start_scene and epoch == start_epoch) or (0 == start_scene and epoch + 1 == start_epoch):
                     continue
@@ -148,7 +157,7 @@ def train():
                 world_coord = torch.tensor(world_coord, device=config.default_device).float()  # (3, N)
                 model_coord = torch.tensor(model_coord, device=config.default_device).float()  # (3, N)
 
-                out = model(world_coord.unsqueeze(0))  # (3, N) -> (1, 3, N) -> (1, 9, 1)
+                out = model(world_coord.unsqueeze(0), model_coord.unsqueeze(0))  # (3, N)*2 -> (1, 3, N)*2 -> (1, 9, 1)
                 a1 = out[0, :3]  # (3, 1)
                 a2 = out[0, 3:6]  # (3, 1)
                 t = out[0, 6:]  # (3, 1)
@@ -180,7 +189,7 @@ def train():
                 t_range.set_postfix(loss=loss.item(), loss_epoch=loss_epoch.item() / loss_n)
                 # logger.info(f'Epoch {epoch:05d}, Scene {scene_str:10s}, Loss {loss_batch.item() / loss_n:.4f}')
 
-                if config.visualize and (i + 1) % config.checkpoint_interval_scene == 0:
+                if config.visualize and (i + 1) % config.visualize_scene_interval == 0:
                     visualize_point_cloud(model_coord_bak, pred_model_in_world_coord.cpu().detach().numpy())
 
                 if (i + 1) % config.checkpoint_interval_scene == 0:
