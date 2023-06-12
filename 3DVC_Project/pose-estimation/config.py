@@ -41,7 +41,7 @@ class Config:
 
         self.num_epochs = 1000
         self.batch_size = 64
-        self.checkpoint_interval = 50
+        self.checkpoint_interval = 1
         self.validate_interval = 100
 
         self.test_output_interval = 10  # value temporarily for debug

@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 
 from config import config
 from obj_model import COLOR_PALETTE
+from mylogger import logger
 
 
 def trivial_collate(batch):
@@ -34,29 +35,43 @@ class LazyDataset(Dataset):
         """
         self._prefix_list = prefix_list
         self._dir = dir
+        self._cache = {}
 
     def __len__(self) -> int:
         return len(self._prefix_list)
 
     def __getitem__(self, index: int):
-        def load_image(prefix, postfix, unchanged=False):
-            filename = f'{prefix}_{postfix}.png'
-            filename = os.path.join(self._dir, filename)
-            if unchanged:
-                image = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
-            else:
-                image = cv2.imread(filename)
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            return image
 
-        prefix = self._prefix_list[index]
-        rgb = load_image(prefix, 'color_kinect') / 255.0  # convert 0-255 to 0-1
-        depth = load_image(prefix, 'depth_kinect', True) / 1000.0  # convert from mm to m
-        label = load_image(prefix, 'label_kinect', True)
-        with open(os.path.join(self._dir, f'{prefix}_meta.pkl'), 'rb') as f:
-            meta = pickle.load(f)
+        def load(index: int):
+            def load_image(prefix, postfix, unchanged=False):
+                filename = f'{prefix}_{postfix}.png'
+                filename = os.path.join(self._dir, filename)
+                if unchanged:
+                    image = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+                else:
+                    image = cv2.imread(filename)
+                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                return image
 
-        return rgb, depth, label, meta, prefix
+            prefix = self._prefix_list[index]
+            rgb = load_image(prefix, 'color_kinect') / 255.0  # convert 0-255 to 0-1
+            depth = load_image(prefix, 'depth_kinect', True) / 1000.0  # convert from mm to m
+            label = load_image(prefix, 'label_kinect', True)
+            with open(os.path.join(self._dir, f'{prefix}_meta.pkl'), 'rb') as f:
+                meta = pickle.load(f)
+
+            return rgb, depth, label, meta, prefix
+
+        if index not in self._cache:
+            # logger.info(f'Loading {config.batch_size} data for cache')
+            # logger.info(self._cache.keys())
+            self._cache.clear()
+            for i in range(index, min(index + config.batch_size, len(self))):
+                self._cache[i] = load(i)
+            # logger.info(self._cache.keys())
+            # logger.info(f'Loaded')
+
+        return self._cache[index]
 
     def get_by_prefix(self, prefix: str):
         index = self._prefix_list.index(prefix)

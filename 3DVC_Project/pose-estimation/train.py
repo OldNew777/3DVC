@@ -110,61 +110,66 @@ def train():
 
     t_range = tqdm(range(start_epoch, config.num_epochs), ncols=160)
     for epoch in t_range:
-        loss_batch = torch.zeros(1)
+        loss_epoch = torch.zeros(1)
         loss_n = 0
-        for iteration, batch in enumerate(train_dataloader):
-            batch_size = len(batch)
-            for i in range(batch_size):
-                rgb, depth, label, meta, prefix = batch[i]
+        n_scene = len(train_dataset)
+        for i in range(n_scene):
+            rgb, depth, label, meta, prefix = train_dataset[i]
 
-                for obj_index, (world_coord, model_coord, pose_world, box_sizes) in \
-                        enumerate(zip(*load_data(obj_model_list, rgb, depth, label, meta))):
-                    # skip if label map is wrong
-                    if world_coord.shape[0] == 0:
-                        continue
+            scene_str = f'{i}/{n_scene}'
+            t_range.set_description(f'Epoch {epoch:05d}, Scene {scene_str:10s}')
 
-                    # process np raw to torch tensor
-                    obj_id = meta['object_ids'][obj_index]
-                    obj_model = obj_model_list[obj_id]
-                    model, optimizer, lr_scheduler = obj_nn_models[obj_id]
+            for obj_index, (world_coord, model_coord, pose_world, box_sizes) in \
+                    enumerate(zip(*load_data(obj_model_list, rgb, depth, label, meta))):
+                # skip if label map is wrong
+                if world_coord.shape[0] == 0:
+                    continue
 
-                    # for debug
-                    if obj_id != 0:
-                        continue
+                # process np raw to torch tensor
+                obj_id = meta['object_ids'][obj_index]
+                obj_model = obj_model_list[obj_id]
+                model, optimizer, lr_scheduler = obj_nn_models[obj_id]
 
-                    # Run model forward
-                    # transform as obj model (obj model in [-1, 1]^3)
-                    world_coord = ((world_coord + obj_model.translate_to_0) * obj_model.scale_to_1).reshape(1, 3, -1)
-                    model_coord = ((model_coord + obj_model.translate_to_0) * obj_model.scale_to_1).reshape(1, 3, -1)
-                    world_coord = torch.tensor(world_coord, device=config.default_device).reshape(1, 3, -1).float()
-                    model_coord = torch.tensor(model_coord, device=config.default_device).reshape(1, 3, -1).float()
+                # Run model forward
+                # transform as obj model (obj model in [-1, 1]^3)
+                world_coord = ((world_coord.T + obj_model.translate_to_0.reshape(3, 1)) * obj_model.scale_to_1)  # (3, N)
+                model_coord = ((model_coord.T + obj_model.translate_to_0.reshape(3, 1)) * obj_model.scale_to_1)  # (3, N)
+                world_coord_bak = world_coord.copy().T
+                model_coord_bak = model_coord.copy().T
+                world_coord = torch.tensor(world_coord, device=config.default_device).float()  # (3, N)
+                model_coord = torch.tensor(model_coord, device=config.default_device).float()  # (3, N)
 
-                    out = model(world_coord)
-                    a1 = out[0, :3]  # (3, 1)
-                    a2 = out[0, 3:6]  # (3, 1)
-                    t = out[0, 6:]  # (3, 1)
-                    R = from_6Dpose_to_R(a1, a2)
+                out = model(world_coord.unsqueeze(0))  # (3, N) -> (1, 3, N) -> (1, 9, 1)
+                a1 = out[0, :3]  # (3, 1)
+                a2 = out[0, 3:6]  # (3, 1)
+                t = out[0, 6:]  # (3, 1)
+                R = from_6Dpose_to_R(a1, a2)
 
-                    # Compute loss
-                    pred_model_in_world_coord = (torch.matmul(R, model_coord.reshape(3, -1)) - t).reshape(-1, 3)
-                    # Fourier loss for rotation
-                    # TODO
-                    # loss for translation
-                    # TODO
-                    # half-CD loss for shape
-                    loss_cd = config.loss_fn(pred_model_in_world_coord, world_coord)
-                    loss = loss_cd
+                # Compute loss
+                world_coord = world_coord.T # (N, 3)
+                pred_model_in_world_coord = (R @ model_coord - t).T  # (N, 3)
 
-                    loss_batch += loss.item()
-                    loss_n += 1
+                # Fourier loss for rotation
+                # TODO
+                # loss for translation
+                # TODO
+                # half-CD loss for shape
+                loss_cd = config.loss_fn(world_coord, pred_model_in_world_coord)
+                loss = loss_cd
 
-                    # Backprop
-                    optimizer.zero_grad()
-                    loss_cd.backward()
-                    optimizer.step()
+                loss_epoch += loss.item()
+                loss_n += 1
 
-        t_range.set_description(f'Epoch {epoch:05d}')
-        t_range.set_postfix(loss=loss_batch[0] / loss_n)
+                # Backprop
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                t_range.set_postfix(loss=loss.item(), loss_epoch=loss_epoch.item() / loss_n)
+                # logger.info(f'Epoch {epoch:05d}, Scene {scene_str:10s}, Loss {loss_batch.item() / loss_n:.4f}')
+
+                if config.visualize and i % 100 == 0 and i != 0:
+                    visualize_point_cloud(model_coord_bak, pred_model_in_world_coord.cpu().detach().numpy())
 
         # Adjust the learning rate
         for _, _, lr_scheduler in obj_nn_models:
@@ -178,16 +183,62 @@ def train():
 
         # Validate
         if epoch % config.validate_interval == 0 and epoch > 0:
-            for iteration, batch in enumerate(validate_dataloader):
-                rgb, depth, label, meta, prefix = batch[0].values()
-                # process np raw to torch tensor
-                # TODO
+            with torch.no_grad():
+                loss_validate = torch.zeros(1)
+                loss_n_validate = 0
+                for iteration, batch in enumerate(validate_dataloader):
+                    for i in range(len(batch)):
+                        rgb, depth, label, meta, prefix = batch[i]
 
-                # Run model forward
-                # out = model()
+                        for obj_index, (world_coord, model_coord, pose_world, box_sizes) in \
+                                enumerate(zip(*load_data(obj_model_list, rgb, depth, label, meta))):
+                            # skip if label map is wrong
+                            if world_coord.shape[0] == 0:
+                                continue
 
-                # Compute loss
-                loss = None
+                            # process np raw to torch tensor
+                            obj_id = meta['object_ids'][obj_index]
+                            obj_model = obj_model_list[obj_id]
+                            model, optimizer, lr_scheduler = obj_nn_models[obj_id]
+
+                            # for debug
+                            if obj_id != 0:
+                                continue
+
+                            # Run model forward
+                            # transform as obj model (obj model in [-1, 1]^3)
+                            world_coord = ((world_coord + obj_model.translate_to_0) * obj_model.scale_to_1).reshape(1,
+                                                                                                                    3,
+                                                                                                                    -1)
+                            model_coord = ((model_coord + obj_model.translate_to_0) * obj_model.scale_to_1).reshape(1,
+                                                                                                                    3,
+                                                                                                                    -1)
+                            world_coord = torch.tensor(world_coord, device=config.default_device).reshape(1, 3,
+                                                                                                          -1).float()
+                            model_coord = torch.tensor(model_coord, device=config.default_device).reshape(1, 3,
+                                                                                                          -1).float()
+
+                            out = model(world_coord)
+                            a1 = out[0, :3]  # (3, 1)
+                            a2 = out[0, 3:6]  # (3, 1)
+                            t = out[0, 6:]  # (3, 1)
+                            R = from_6Dpose_to_R(a1, a2)
+
+                            # Compute loss
+                            pred_model_in_world_coord = torch.bmm(R.reshape(1, 3, -1), model_coord) - t
+                            # Fourier loss for rotation
+                            # TODO
+                            # loss for translation
+                            # TODO
+                            # half-CD loss for shape
+                            loss_cd = config.loss_fn(world_coord.reshape(-1, 3),
+                                                     pred_model_in_world_coord.reshape(-1, 3))
+                            loss = loss_cd
+
+                            loss_validate += loss.item()
+                            loss_n_validate += 1
+
+                logger.info(f'Epoch {epoch:05d}: Validation loss: {loss_validate.item() / loss_n_validate}')
 
 
 def load_data(obj_model_list: ObjList, rgb: np.ndarray, depth: np.ndarray, label: np.ndarray, meta: dict):
