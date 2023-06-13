@@ -6,10 +6,11 @@ from loss import *
 
 class Config:
     def __init__(self):
-        self.algo_type = 'nn'   # 'icp' or 'nn'
+        self.algo_type = 'icp'   # 'icp' or 'nn'
         self.process = 'train'  # 'train' or 'test', only for 'nn'
 
-        self.data_dir = os.path.realpath('D:/OldNew/3DVC/pose-estimation')
+        # self.data_dir = os.path.realpath('D:/OldNew/3DVC/pose-estimation')
+        self.data_dir = os.path.realpath('***************** the real path to the data_dir *****************')
         self.training_data_dir = os.path.join(self.data_dir, 'training_data')
         self.testing_data_dir = os.path.join(self.data_dir, 'testing_data')
         self.obj_model_dir = os.path.join(self.data_dir, 'model')
@@ -17,8 +18,9 @@ class Config:
         self.nn_model_dir = os.path.join(self.output_dir, 'nnModel')
         self.output_path = os.path.join(self.output_dir, 'output.json')
         self.extra_info_path = os.path.join(self.output_dir, 'extra_info.pkl')
-        os.makedirs(self.nn_model_dir, exist_ok=True)
         os.makedirs(self.output_dir, exist_ok=True)
+        if self.algo_type == 'nn':
+            os.makedirs(self.nn_model_dir, exist_ok=True)
 
         self.device_ids = [i for i in range(torch.cuda.device_count())]
         self.default_device = 0 if torch.cuda.is_available() else 'cpu'
@@ -36,14 +38,14 @@ class Config:
         self.n_seg = 3
 
         self.lr = 1e-4
-        self.lr_scheduler_step_size = 1000
+        self.lr_scheduler_step_size = 5
         self.lr_scheduler_gamma = 0.9
         self.loss_fn = HalfCDLoss()
 
-        self.num_epochs = 1000
+        self.num_epochs = 10
         self.batch_size = 64
         self.checkpoint_interval = 1
-        self.validate_interval = 100
+        self.validate_interval = 10
         self.checkpoint_interval_scene = 100
 
         self.test_output_interval = 10  # value temporarily for debug

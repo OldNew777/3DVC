@@ -25,6 +25,9 @@ def icp_init(obj_model: ObjModel):
     seg_max[mask_inf] = 1
     seg_max[mask_edge] = min(2, config.n_seg)
     seg_max[mask_5toinf] = 1
+    if mask_inf.sum() >= 2:
+        seg_max[:] = 1
+        degree_max[:] = 2 * np.pi
 
     # logger.debug(obj_model.geometric_symmetry)
     # logger.debug(obj_model.geometric_symmetry_split)

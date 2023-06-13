@@ -141,6 +141,8 @@ def train():
                 # process np raw to torch tensor
                 obj_id = meta['object_ids'][obj_index]
                 obj_model = obj_model_list[obj_id]
+                world_coord_bak = world_coord.copy().T  # (3, N)
+                model_coord_bak = model_coord.copy().T  # (3, N)
 
                 model, optimizer, lr_scheduler, start_scene = obj_nn_models[obj_id]
                 if (i < start_scene and epoch == start_epoch) or (0 == start_scene and epoch + 1 == start_epoch):
@@ -150,10 +152,12 @@ def train():
                 # transform as obj model (obj model in [-1, 1]^3)
                 world_coord = (
                         (world_coord.T + obj_model.translate_to_0.reshape(3, 1)) * obj_model.scale_to_1)  # (3, N)
+                world_coord_max = world_coord.max(axis=1, keepdims=True)
+                world_coord_min = world_coord.min(axis=1, keepdims=True)
+                world_coord_mid = (world_coord_max + world_coord_min) / 2
+                world_coord = world_coord - world_coord_mid
                 model_coord = (
                         (model_coord.T + obj_model.translate_to_0.reshape(3, 1)) * obj_model.scale_to_1)  # (3, N)
-                world_coord_bak = world_coord.copy().T
-                model_coord_bak = model_coord.copy().T
                 world_coord = torch.tensor(world_coord, device=config.default_device).float()  # (3, N)
                 model_coord = torch.tensor(model_coord, device=config.default_device).float()  # (3, N)
 
@@ -163,9 +167,15 @@ def train():
                 t = out[0, 6:]  # (3, 1)
                 R = from_6Dpose_to_R(a1, a2)
 
+                t0 = torch.tensor(obj_model.translate_to_0.reshape(3, 1), device=config.default_device).float()
+                s0 = torch.tensor(obj_model.scale_to_1, device=config.default_device).float()
+                world_coord_mid = torch.tensor(world_coord_mid, device=config.default_device).float()
+                t = R @ t0 - t0 + (t + world_coord_mid) / s0
+
                 # Compute loss
-                world_coord = world_coord.T  # (N, 3)
-                pred_model_in_world_coord = (R @ model_coord - t).T  # (N, 3)
+                world_coord = torch.tensor(world_coord_bak, device=config.default_device).float()  # (3, N)
+                model_coord = torch.tensor(model_coord_bak, device=config.default_device).float()  # (3, N)
+                pred_model_in_world_coord = R @ model_coord - t  # (3, N)
 
                 # # loss for transformation (geometry symmetric un-considered)
                 # ref_6d = torch.concat([torch.tensor(pose_world[0, :3], device=config.default_device),
@@ -174,7 +184,7 @@ def train():
                 # loss_6d = torch.linalg.norm(pred_6d - ref_6d) + \
                 #           torch.linalg.norm(t.squeeze() - torch.tensor(pose_world[2, :3], device=config.default_device))
                 # half-CD loss for shape
-                loss_cd = config.loss_fn(world_coord, pred_model_in_world_coord)
+                loss_cd = config.loss_fn(world_coord.T, pred_model_in_world_coord.T)
 
                 loss = loss_cd
 
@@ -190,7 +200,7 @@ def train():
                 # logger.info(f'Epoch {epoch:05d}, Scene {scene_str:10s}, Loss {loss_batch.item() / loss_n:.4f}')
 
                 if config.visualize and (i + 1) % config.visualize_scene_interval == 0:
-                    visualize_point_cloud(model_coord_bak, pred_model_in_world_coord.cpu().detach().numpy())
+                    visualize_point_cloud(model_coord_bak.T, pred_model_in_world_coord.cpu().detach().numpy().T)
 
                 if (i + 1) % config.checkpoint_interval_scene == 0:
                     logger.info(f'Saving checkpoint {epoch}, scene {i + 1}')
@@ -208,63 +218,66 @@ def train():
                 save_state_dict(model, optimizer, epoch + 1, obj_id, 0)
 
         # Validate
-        # if (epoch + 1) % config.validate_interval == 0 and epoch > 0:
-        #     with torch.no_grad():
-        #         loss_validate = torch.zeros(1)
-        #         loss_n_validate = 0
-        #         for iteration, batch in enumerate(validate_dataloader):
-        #             for i in range(len(batch)):
-        #                 rgb, depth, label, meta, prefix = batch[i]
-        #
-        #                 for obj_index, (world_coord, model_coord, pose_world, box_sizes) in \
-        #                         enumerate(zip(*load_data(obj_model_list, rgb, depth, label, meta))):
-        #                     # skip if label map is wrong
-        #                     if world_coord.shape[0] == 0:
-        #                         continue
-        #
-        #                     # process np raw to torch tensor
-        #                     obj_id = meta['object_ids'][obj_index]
-        #                     obj_model = obj_model_list[obj_id]
-        #                     model, optimizer, lr_scheduler = obj_nn_models[obj_id]
-        #
-        #                     # for debug
-        #                     if obj_id != 0:
-        #                         continue
-        #
-        #                     # Run model forward
-        #                     # transform as obj model (obj model in [-1, 1]^3)
-        #                     world_coord = ((world_coord + obj_model.translate_to_0) * obj_model.scale_to_1).reshape(1,
-        #                                                                                                             3,
-        #                                                                                                             -1)
-        #                     model_coord = ((model_coord + obj_model.translate_to_0) * obj_model.scale_to_1).reshape(1,
-        #                                                                                                             3,
-        #                                                                                                             -1)
-        #                     world_coord = torch.tensor(world_coord, device=config.default_device).reshape(1, 3,
-        #                                                                                                   -1).float()
-        #                     model_coord = torch.tensor(model_coord, device=config.default_device).reshape(1, 3,
-        #                                                                                                   -1).float()
-        #
-        #                     out = model(world_coord)
-        #                     a1 = out[0, :3]  # (3, 1)
-        #                     a2 = out[0, 3:6]  # (3, 1)
-        #                     t = out[0, 6:]  # (3, 1)
-        #                     R = from_6Dpose_to_R(a1, a2)
-        #
-        #                     # Compute loss
-        #                     pred_model_in_world_coord = torch.bmm(R.reshape(1, 3, -1), model_coord) - t
-        #                     # Fourier loss for rotation
-        #                     # TODO
-        #                     # loss for translation
-        #                     # TODO
-        #                     # half-CD loss for shape
-        #                     loss_cd = config.loss_fn(world_coord.reshape(-1, 3),
-        #                                              pred_model_in_world_coord.reshape(-1, 3))
-        #                     loss = loss_cd
-        #
-        #                     loss_validate += loss.item()
-        #                     loss_n_validate += 1
-        #
-        #         logger.info(f'Epoch {epoch:05d}: Validation loss: {loss_validate.item() / loss_n_validate}')
+        if (epoch + 1) % config.validate_interval == 0 and epoch > 0:
+            with torch.no_grad():
+                n_all_validate = 0
+                correct_n_validate = 0
+                for i in range(len(validate_dataset)):
+                    rgb, depth, label, meta, prefix = validate_dataset[i]
+
+                    for obj_index, (world_coord, model_coord, pose_world, box_sizes) in \
+                            enumerate(zip(*load_data(obj_model_list, rgb, depth, label, meta))):
+                        # skip if label map is wrong
+                        if world_coord.shape[0] == 0:
+                            continue
+
+                        # process np raw to torch tensor
+                        obj_id = meta['object_ids'][obj_index]
+                        obj_model = obj_model_list[obj_id]
+                        world_coord_bak = world_coord.copy().T  # (3, N)
+                        model_coord_bak = model_coord.copy().T  # (3, N)
+
+                        model, optimizer, lr_scheduler, start_scene = obj_nn_models[obj_id]
+                        if (i < start_scene and epoch == start_epoch) or (
+                                0 == start_scene and epoch + 1 == start_epoch):
+                            continue
+
+                        # Run model forward
+                        # transform as obj model (obj model in [-1, 1]^3)
+                        world_coord = (
+                                (world_coord.T + obj_model.translate_to_0.reshape(3,
+                                                                                  1)) * obj_model.scale_to_1)  # (3, N)
+                        world_coord_max = world_coord.max(axis=1, keepdims=True)
+                        world_coord_min = world_coord.min(axis=1, keepdims=True)
+                        world_coord_mid = (world_coord_max + world_coord_min) / 2
+                        world_coord = world_coord - world_coord_mid
+                        model_coord = (
+                                (model_coord.T + obj_model.translate_to_0.reshape(3,
+                                                                                  1)) * obj_model.scale_to_1)  # (3, N)
+                        world_coord = torch.tensor(world_coord, device=config.default_device).float()  # (3, N)
+                        model_coord = torch.tensor(model_coord, device=config.default_device).float()  # (3, N)
+
+                        out = model(world_coord.unsqueeze(0),
+                                    model_coord.unsqueeze(0))  # (3, N)*2 -> (1, 3, N)*2 -> (1, 9, 1)
+                        a1 = out[0, :3]  # (3, 1)
+                        a2 = out[0, 3:6]  # (3, 1)
+                        t = out[0, 6:]  # (3, 1)
+                        R = from_6Dpose_to_R(a1, a2)
+
+                        t0 = torch.tensor(obj_model.translate_to_0.reshape(3, 1), device=config.default_device).float()
+                        s0 = torch.tensor(obj_model.scale_to_1, device=config.default_device).float()
+                        world_coord_mid = torch.tensor(world_coord_mid, device=config.default_device).float()
+                        t = R @ t0 - t0 + (t + world_coord_mid) / s0
+
+                        # Compute loss
+                        n_all_validate += 1
+                        pred_pose_world = np.eye(4)
+                        pred_pose_world[:3, :3] = R.cpu().detach().numpy()
+                        pred_pose_world[:3, 3] = t.cpu().detach().numpy().reshape(3)
+                        r_diff, t_diff = eval(pred_pose_world, pose_world, obj_model.geometric_symmetry)
+                        correct_n_validate += judge(r_diff, t_diff)
+
+            logger.info(f'Epoch {epoch + 1:05d}, Validate correct: {correct_n_validate}/{n_all_validate}')
 
 
 def load_data(obj_model_list: ObjList, rgb: np.ndarray, depth: np.ndarray, label: np.ndarray, meta: dict):
@@ -314,7 +327,7 @@ def load_data(obj_model_list: ObjList, rgb: np.ndarray, depth: np.ndarray, label
     return world_space_list, model_space_list, pose_world_list, box_sizes_list
 
 
-def test(algo_type: str = 'icp', nn_info: Tuple = None):
+def test(algo_type: str = 'icp'):
     test_dataset = get_datasets('test')
     obj_csv_path = os.path.join(config.testing_data_dir, 'objects_v1.csv')
     obj_model_list = ObjList(obj_csv_path)
@@ -377,11 +390,11 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
                     correct_rate = n_correct / n_all
                     pbar.set_postfix_str(f'correct ({n_correct}/{n_all}, {correct_rate:.06f})')
 
-                    # # visualize
-                    # if config.visualize:
-                    #     R_ref = pose_world[:3, :3]
-                    #     t_ref = pose_world[:3, 3]
-                    #     visualize_point_cloud(world_coord, model_coord @ R.T + t, model_coord @ R_ref.T + t_ref)
+                    # visualize
+                    if config.visualize and pose_world is not None and not judge(r_diff, t_diff):
+                        R_ref = pose_world[:3, :3]
+                        t_ref = pose_world[:3, 3]
+                        visualize_point_cloud(world_coord, model_coord @ R.T + t)
 
                 output[prefix]['poses_world'] = pose_world_predict_list
 
@@ -392,31 +405,72 @@ def test(algo_type: str = 'icp', nn_info: Tuple = None):
         json.dump(output, open(config.output_path, 'w'))
 
     elif algo_type == 'nn':
-        if nn_info is None:
-            model, optimizer, lr_scheduler, start_epoch = create_model('test')
-        else:
-            model, optimizer, lr_scheduler, start_epoch = nn_info
+        _, obj_nn_models = create_model('train')
 
-        test_dataloader = torch.utils.data.DataLoader(
-            test_dataset,
-            batch_size=config.batch_size,
-            shuffle=True,
-            num_workers=0,
-            collate_fn=lambda batch: batch,
-        )
+        # test_dataloader = torch.utils.data.DataLoader(
+        #     test_dataset,
+        #     batch_size=config.batch_size,
+        #     shuffle=True,
+        #     num_workers=0,
+        #     collate_fn=lambda batch: batch,
+        # )
 
         with torch.no_grad():
-            # tqdm
-            for iteration, batch in enumerate(tqdm.tqdm(test_dataloader, desc='NN', ncols=160)):
-                rgb, depth, label, meta, prefix = batch[0].values()
-                # process np raw to torch tensor
-                # TODO
+            n_all_validate = 0
+            correct_n_test = 0
+            for i in range(len(test_dataset)):
+                rgb, depth, label, meta, prefix = test_dataset[i]
 
-                # Run model forward
-                # out = model()
+                for obj_index, (world_coord, model_coord, pose_world, box_sizes) in \
+                        enumerate(zip(*load_data(obj_model_list, rgb, depth, label, meta))):
+                    # skip if label map is wrong
+                    if world_coord.shape[0] == 0:
+                        continue
 
-                # Compute loss
-                loss = None
+                    # process np raw to torch tensor
+                    obj_id = meta['object_ids'][obj_index]
+                    obj_model = obj_model_list[obj_id]
+                    world_coord_bak = world_coord.copy().T  # (3, N)
+                    model_coord_bak = model_coord.copy().T  # (3, N)
+
+                    model, optimizer, lr_scheduler, start_scene = obj_nn_models[obj_id]
+
+                    # Run model forward
+                    # transform as obj model (obj model in [-1, 1]^3)
+                    world_coord = (
+                            (world_coord.T + obj_model.translate_to_0.reshape(3,
+                                                                              1)) * obj_model.scale_to_1)  # (3, N)
+                    world_coord_max = world_coord.max(axis=1, keepdims=True)
+                    world_coord_min = world_coord.min(axis=1, keepdims=True)
+                    world_coord_mid = (world_coord_max + world_coord_min) / 2
+                    world_coord = world_coord - world_coord_mid
+                    model_coord = (
+                            (model_coord.T + obj_model.translate_to_0.reshape(3,
+                                                                              1)) * obj_model.scale_to_1)  # (3, N)
+                    world_coord = torch.tensor(world_coord, device=config.default_device).float()  # (3, N)
+                    model_coord = torch.tensor(model_coord, device=config.default_device).float()  # (3, N)
+
+                    out = model(world_coord.unsqueeze(0),
+                                model_coord.unsqueeze(0))  # (3, N)*2 -> (1, 3, N)*2 -> (1, 9, 1)
+                    a1 = out[0, :3]  # (3, 1)
+                    a2 = out[0, 3:6]  # (3, 1)
+                    t = out[0, 6:]  # (3, 1)
+                    R = from_6Dpose_to_R(a1, a2)
+
+                    t0 = torch.tensor(obj_model.translate_to_0.reshape(3, 1), device=config.default_device).float()
+                    s0 = torch.tensor(obj_model.scale_to_1, device=config.default_device).float()
+                    world_coord_mid = torch.tensor(world_coord_mid, device=config.default_device).float()
+                    t = R @ t0 - t0 + (t + world_coord_mid) / s0
+
+                    # Compute loss
+                    n_all_validate += 1
+                    pred_pose_world = np.eye(4)
+                    pred_pose_world[:3, :3] = R.cpu().detach().numpy()
+                    pred_pose_world[:3, 3] = t.cpu().detach().numpy().reshape(3)
+                    r_diff, t_diff = eval(pred_pose_world, pose_world, obj_model.geometric_symmetry)
+                    correct_n_test += judge(r_diff, t_diff)
+
+        logger.info(f'Correct {correct_n_test}/{n_all_validate} = {correct_n_test / n_all_validate:.06f}')
     else:
         raise ValueError(f'Unknown algo_type {algo_type}')
 
