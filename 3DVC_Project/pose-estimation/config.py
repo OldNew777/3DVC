@@ -6,11 +6,11 @@ from loss import *
 
 class Config:
     def __init__(self):
-        self.algo_type = 'icp'   # 'icp' or 'nn'
-        self.process = 'train'  # 'train' or 'test', only for 'nn'
+        self.algo_type = 'nn'   # 'icp' or 'nn'
+        self.process = 'test'  # 'train' or 'test', only for 'nn'
 
-        # self.data_dir = os.path.realpath('D:/OldNew/3DVC/pose-estimation')
-        self.data_dir = os.path.realpath('***************** the real path to the data_dir *****************')
+        self.data_dir = os.path.realpath('D:/OldNew/3DVC/pose-estimation')
+        # self.data_dir = os.path.realpath('***************** the real path to the data_dir *****************')
         self.training_data_dir = os.path.join(self.data_dir, 'training_data')
         self.testing_data_dir = os.path.join(self.data_dir, 'testing_data')
         self.obj_model_dir = os.path.join(self.data_dir, 'model')

@@ -402,8 +402,6 @@ def test(algo_type: str = 'icp'):
                     json.dump(output, open(config.output_path, 'w'))
                     pickle.dump({'n_all': n_all, 'n_correct': n_correct}, open(config.extra_info_path, 'wb'))
 
-        json.dump(output, open(config.output_path, 'w'))
-
     elif algo_type == 'nn':
         _, obj_nn_models = create_model('train')
 
@@ -418,8 +416,14 @@ def test(algo_type: str = 'icp'):
         with torch.no_grad():
             n_all_validate = 0
             correct_n_test = 0
-            for i in range(len(test_dataset)):
+            pbar = tqdm(range(len(test_dataset)), ncols=160, desc='NN')
+            for i in pbar:
                 rgb, depth, label, meta, prefix = test_dataset[i]
+                if prefix in output:
+                    continue
+
+                output[prefix] = {}
+                pose_world_predict_list = [None for _ in range(config.n_obj)]
 
                 for obj_index, (world_coord, model_coord, pose_world, box_sizes) in \
                         enumerate(zip(*load_data(obj_model_list, rgb, depth, label, meta))):
@@ -461,18 +465,30 @@ def test(algo_type: str = 'icp'):
                     s0 = torch.tensor(obj_model.scale_to_1, device=config.default_device).float()
                     world_coord_mid = torch.tensor(world_coord_mid, device=config.default_device).float()
                     t = R @ t0 - t0 + (t + world_coord_mid) / s0
+                    pose_world_pred = np.eye(4)
+                    pose_world_pred[:3, :3] = R.cpu().detach().numpy()
+                    pose_world_pred[:3, 3] = t.cpu().detach().numpy().reshape(3)
+                    pose_world_predict_list[obj_id] = pose_world_pred.tolist()
 
                     # Compute loss
                     n_all_validate += 1
                     pred_pose_world = np.eye(4)
                     pred_pose_world[:3, :3] = R.cpu().detach().numpy()
                     pred_pose_world[:3, 3] = t.cpu().detach().numpy().reshape(3)
-                    r_diff, t_diff = eval(pred_pose_world, pose_world, obj_model.geometric_symmetry)
-                    correct_n_test += judge(r_diff, t_diff)
+                    # r_diff, t_diff = eval(pred_pose_world, pose_world, obj_model.geometric_symmetry)
+                    # correct_n_test += judge(r_diff, t_diff)
 
-        logger.info(f'Correct {correct_n_test}/{n_all_validate} = {correct_n_test / n_all_validate:.06f}')
+                output[prefix]['poses_world'] = pose_world_predict_list
+
+                if i % config.test_output_interval == 0 and i > 0:
+                    json.dump(output, open(config.output_path, 'w'))
+                    pickle.dump({'n_all': n_all, 'n_correct': n_correct}, open(config.extra_info_path, 'wb'))
+
     else:
         raise ValueError(f'Unknown algo_type {algo_type}')
+
+    json.dump(output, open(config.output_path, 'w'))
+    pickle.dump({'n_all': n_all, 'n_correct': n_correct}, open(config.extra_info_path, 'wb'))
 
 
 def main():

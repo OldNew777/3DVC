@@ -35,10 +35,10 @@ def process():
                 pose_np = np.array(pose_world)
                 R = pose_np[:3, :3]
                 t = pose_np[:3, 3]
-                R_diff = euler2mat(np.random.rand() * 5 / 180 * np.pi,
-                                   np.random.rand() * 5 / 180 * np.pi,
-                                   np.random.rand() * 5 / 180 * np.pi)
-                t_diff = np.random.rand(3) * 0.07
+                R_diff = euler2mat(np.random.rand() * 10 / 180 * np.pi,
+                                   np.random.rand() * 10 / 180 * np.pi,
+                                   np.random.rand() * 10 / 180 * np.pi)
+                t_diff = np.random.rand(3) * 0.15
                 pose_np[:3, :3] = R @ R_diff
                 pose_np[:3, 3] = R_diff @ t + t_diff
                 pose_list[i] = pose_np.tolist()
