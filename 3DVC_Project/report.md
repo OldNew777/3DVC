@@ -12,6 +12,8 @@ Choose to solve `6D Object Pose Estimation`
 
 Experiments carried on 
 
+> Windows11
+>
 > i9-9900
 >
 > Mem 32G-3200MHz
@@ -99,6 +101,8 @@ $\text{degree\_max } = n\_seg / k$
 
 Additionally, if 2 axises have `inf` geometric symmetry, it means this object has `inf` geometric symmetry in the 3rd axis also. 
 
+We can share k-d trees for query when the matching targets are the same, but the initialization algorithm will transform the target to different poses. So we add a simple optimization: if the object doesn't have geometric symmetry in any axis, we share the same kd tree of visiable points in world coordinate and rotate the model groud truth, otherwise we rotate the model object and construct a kd tree for each initial pose. 
+
 
 
 ###### By value
@@ -144,10 +148,11 @@ Here are some examples:
 
 <center>
     <figure>
-        <img src="pictures/ICP - 0.png" width='500'/>
-        <img src="pictures/ICP - 1.png" width='500'/>
+        <img src="pictures/ICP - 0.png" width='450'/>
+        <img src="pictures/ICP - 1.png" width='450'/>
     </figure>
 </center>
+
 
 Here are some failure cases:
 
@@ -222,6 +227,8 @@ We didn't use RGB information. Only geometric information is used. And we train 
 
 The network structures are as below:
 
+![network-structure](pictures/network-structure.svg)
+
 1. Concat the pre-transformed `world_coord` and `model_coord` as input, to improve the network's ability of expression. 
 2. Use an MLP to get the features of each point. (1024-dimension features)
 3. Use a max pooling layer to extract the feature of the whole PCD. 
@@ -240,6 +247,9 @@ W &= RM + R t_0 -t_0 + \frac{1}{s_0} (t + t_{mean})	\\
 \end{aligned}
 $$
 
+Then we use $L_{CD\_half}$ states above to calculate loss and backward. 
+
+
 
 ### Experiment
 
@@ -253,7 +263,9 @@ Use `Adam` optimizer and `LambdaLR` (`lr_lambda = lr_scheduler_gamma  ** (epoch 
 
 
 
-Training for `10 epochs` (there are too many scenes)
+We separate training/validate set as the provided `splits`
+
+Training for `10 epochs` because of time limit. 
 
 We get a correct rate of $27.4\%$ on the validate set. 
 
@@ -263,9 +275,10 @@ Here are some examples:
 
 <center>
     <figure>
-        <img src="pictures/nn - 0.png" width="500"/>
+        <img src="pictures/nn - 0.png" width="450"/>
     </figure>
 </center>
+
 
 Here are some failure cases:
 
@@ -285,19 +298,55 @@ Most of the failure cases are caused by local minimum.
 
 ### Possible improvements
 
-1. We refered to `PointNet` and designed a similar network to extract features of the PCD. However, the structure of this network (only 1 max pooling layer in the points channel) limits the ability of feature extraction. It can only extract global features and is more suitable for classification. 
+1. We refered to `PointNet` and designed a similar network to extract features of the PCD. However, the structure of this network (only 1 max pooling layer in the points channel) limits the ability of feature extraction. So this network structure can only extract global features and is more suitable for tasks based on global features like classification. 
    1. A possible solution is to extract features by LOD like `PointNet++`. For every extraction, we enlarge the kernel size to extract features from adjacent points, and add and MLP between 2 levels.  
    2. If there is more time for this project, I may try PCD registration like `PCRNet` or `OMNet`. We believe these networks are more suitable for this problem. 
-2. We considered geometric symmetry in the ICP algorithm, but didn't consider it in the learning-based section, because of which the network will miss many correct but symmetric answers. If we improve loss function by geometric symmetry, like a minimum of all possible transformation, the network will detect more potential correct answers I think. 
+2. We considered geometric symmetry in the ICP algorithm, but didn't consider it in the learning-based section, because of which the network will miss many correct answers. If we improve loss function by geometric symmetry, like a minimum of all possible transformation, the network will detect more potential correct answers I think. 
+2. We didn't use RGB information, which could be used for pixel-PCD matching. A `ResNet` for RGB feature extraction may provide some help. 
 
 
 
 ## 3. Combination method
 
-As is stated above in the ICP section, we set multiple initial poses, each (expect those skipped by branch-cut algorithm) may go through ICP algorithm, which is very expensive. 
+ICP algorithm is extremely accurate if we give it a good initial pose $(R_0, t_0)$ and it doesn't fall into local minimum. 
 
-And we didn't consider the geometric symmetry in the learning-based method, which may miss many possible symmetric answers. 
+But as is stated above in the ICP section, we set multiple initial poses, each (expect those skipped by branch-cut algorithm) may go through ICP algorithm, which is very expensive. 
 
-We could use multiple initial poses and ICP to generate rough transformations. For example, adjusting `icp_tolerance` from 1e-8 to 1e-2. So we use these rough transformations to generate rough transformed models as input of neural networks to solve the problems of initial poses sensitivity.  (We can also apply the possible improvements mentioned in both sections above.)
 
-Also
+
+### Idea 1
+
+We could use multiple initial poses and ICP to generate rough transformations $(R_0, t_0)$. 
+
+For example, adjusting `icp_tolerance` from `1e-8` to `1e-2`. 
+
+Apply the rough transform $(R_0, t_0)$ to the object model as input of the neural network (to solve the problems of initial poses sensitivity). 
+
+We can also apply the possible improvements mentioned in both sections above.
+
+
+
+### Idea 2
+
+We could first use a neural network to learn the pose estimation in the case of orientation range $[-180\degree, 180\degree]$
+
+Then, based on the transformation $(R_0, t_0)$ predicted by the network, the 2 PCDs can be further aligned precisely in the second stage by using ICP algorithm. 
+
+
+
+### Experiments
+
+We can record the speed and accuracy of experiment settings below:
+
+Idea 1 and 2 can form a comparation themselves, to balance the speed and accuracy. 
+
+We can also do some ablation studies on the 2 ideas:
+
+1. Idea 1:
+   1. Change the rough transformation generation algorithm, like different `icp_tolerance`, or no initialization
+   2. Compare it with purely network method
+   3. Compare it with idea 2
+2. Idea 2:
+   1. Compare the initial poses quality generated with clear/noisy input by network
+   2. Compare it with purely ICP
+   3. Compare it with idea 1

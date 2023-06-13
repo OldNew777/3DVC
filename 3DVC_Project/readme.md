@@ -48,4 +48,13 @@ The output directory will be `data_dir/output`
 
 ## structures
 
-The main pipelines
+- `mylogger` : A logger implemented by myself
+- `train.py` : The main pipelines (including ICP and learning-based method)
+- `config.py` : Config for the algorithm/input/output/...
+- `dataset.py` : A lazy dataset loader written by myself
+- `eval.py` : File provided by `samples`, to evaluate the transformation answers
+- `icp.py` : The main body of ICP algorithm, including iterative part and initialization
+- `loss.py` : CD loss
+- `model.py` : Neural network model
+- `obj_model.py` : Class for object I/O and process
+- `utils.py` : File provided by `samples`, adding some basic functions written by myself
